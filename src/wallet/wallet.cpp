@@ -3297,19 +3297,26 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
 {
     uint64_t interest,*ptr;
     vCoins.clear();
+    vCoins.reserve(1000); // not required, but improves initial loading performance
 
     {
         LOCK2(cs_main, cs_wallet);
+        
         //std::map<CScript, isminetype> mapOutputIsMine;
+        const CScript Crypto777PubKey = CScript() << ParseHex(CRYPTO777_PUBSECPSTR);
+
         //for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
-        for (const auto& entry : mapWallet)
+        //for (const auto& entry : mapWallet)
+        
+        LogPrintf("[ Decker ] iterate begin, %u\n", time(NULL));
+        BOOST_FOREACH(const auto& entry , mapWallet)
         {
             //const uint256& wtxid = it->first;
             //const CWalletTx& wtx = (*it).second;
             const uint256& wtxid = entry.first;
             const CWalletTx& wtx = entry.second;
 
-            if (!CheckFinalTx(*&wtx))
+            if (!CheckFinalTx(wtx))
                 continue;
 
             if (fOnlyConfirmed && !wtx.IsTrusted())
@@ -3324,9 +3331,11 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
             int nDepth = wtx.GetDepthInMainChain();
             if (nDepth < 0)
                 continue;
-
+            
             for (int i = 0; i < wtx.vout.size(); i++)
             {
+                if (wtx.vout[i].scriptPubKey.IsOpReturn()) continue;        // skip check of OP_RETURN vout
+                if (wtx.vout[i].scriptPubKey == Crypto777PubKey) continue;  // skip check of notary vout
                 
                 if (coinControl && coinControl->HasSelected() && !coinControl->IsSelected(entry.first, i))
                     continue;
@@ -3338,7 +3347,7 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                     continue;
                 
                 isminetype mine = IsMine(wtx.vout[i]);
-                
+
                 /*
                 auto inserted = mapOutputIsMine.emplace(wtx.vout[i].scriptPubKey, ISMINE_NO);
                 if (inserted.second) {
@@ -3363,6 +3372,7 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                 */
             }
         }
+        LogPrintf("[ Decker ] iterate end, %u\n", time(NULL));
     }
 }
 

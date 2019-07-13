@@ -3277,6 +3277,95 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
 uint64_t komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
 uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
+/*
+
+AvailableCoinsFast - is highly experimental fast implementation of CWallet::AvailableCoins for NN by Decker.
+
+1. https://github.com/bitcoin/bitcoin/commit/faa3a246e8809b4954a4a6d202fe8c7f7f776b6e - scripted-diff: wallet: Rename &wtx to wtx
+
+    sed -i --regexp-extended -e 's/const CWalletTx ?\* ?pcoin = &/const CWalletTx\& wtx = /g' src/wallet/wallet.cpp
+    sed -i -e 's/\<pcoin->/wtx./g' src/wallet/wallet.cpp
+    sed -i -e 's/\<pcoin\>/\&wtx/g' src/wallet/wallet.cpp
+
+2. https://github.com/bitcoin/bitcoin/commit/680bc2cbb34d6bedd0e64b17d0555216572be4c8 - Use range-based for loops (C++11) when looping over map elements
+
+3. https://github.com/bitcoin/bitcoin/pull/9939/files - Cache vout IsMine() value on `CWallet::AvailableCoins()` [ TODO! ]
+
+*/
+
+void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
+{
+    uint64_t interest,*ptr;
+    vCoins.clear();
+
+    {
+        LOCK2(cs_main, cs_wallet);
+        //std::map<CScript, isminetype> mapOutputIsMine;
+        //for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        for (const auto& entry : mapWallet)
+        {
+            //const uint256& wtxid = it->first;
+            //const CWalletTx& wtx = (*it).second;
+            const uint256& wtxid = entry.first;
+            const CWalletTx& wtx = entry.second;
+
+            if (!CheckFinalTx(*&wtx))
+                continue;
+
+            if (fOnlyConfirmed && !wtx.IsTrusted())
+                continue;
+
+            if (wtx.IsCoinBase() && !fIncludeCoinBase)
+                continue;
+
+            if (wtx.IsCoinBase() && wtx.GetBlocksToMaturity() > 0)
+                continue;
+
+            int nDepth = wtx.GetDepthInMainChain();
+            if (nDepth < 0)
+                continue;
+
+            for (int i = 0; i < wtx.vout.size(); i++)
+            {
+                
+                if (coinControl && coinControl->HasSelected() && !coinControl->IsSelected(entry.first, i))
+                    continue;
+
+                if (IsLockedCoin(entry.first, i))
+                    continue;
+                
+                if (IsSpent(wtxid, i))
+                    continue;
+                
+                isminetype mine = IsMine(wtx.vout[i]);
+                
+                /*
+                auto inserted = mapOutputIsMine.emplace(wtx.vout[i].scriptPubKey, ISMINE_NO);
+                if (inserted.second) {
+                   inserted.first->second = IsMine(wtx.vout[i]);
+                }
+                isminetype mine = inserted.first->second;
+                */
+
+                if (mine != ISMINE_NO &&
+                    (wtx.vout[i].nValue > 0 || fIncludeZeroValue))
+                {
+                    // interest calc for utxos is temporary removed, to measure speed (!)
+                    vCoins.push_back(COutput(&wtx, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
+                }
+                /*
+                if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
+                    !IsLockedCoin((*it).first, i) && (wtx.vout[i].nValue > 0 || fIncludeZeroValue) &&
+                    (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
+                {
+                    vCoins.push_back(COutput(&wtx, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
+                }
+                */
+            }
+        }
+    }
+}
+
 void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
 {
     uint64_t interest,*ptr;

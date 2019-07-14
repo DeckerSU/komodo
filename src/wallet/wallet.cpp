@@ -3293,7 +3293,7 @@ AvailableCoinsFast - is highly experimental fast implementation of CWallet::Avai
 
 */
 
-void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
+void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase, const int nMinDepth, const int nMaxDepth) const
 {
     uint64_t interest,*ptr;
 
@@ -3356,6 +3356,9 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
             if (nDepth < 0)
                 continue;
             
+            if (nDepth < nMinDepth || nDepth > nMaxDepth)
+                continue;
+                
             bool fAllVoutsSpent = true;
             for (int i = 0; i < wtx.vout.size(); i++)
             {

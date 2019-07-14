@@ -3025,8 +3025,12 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
     vector<COutput> vecOutputs;
     assert(pwalletMain != NULL);
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->AvailableCoinsFast(vecOutputs, false, NULL, true);
+    // pwalletMain->AvailableCoinsFast(vecOutputs, false, NULL, true);
+    pwalletMain->AvailableCoinsFast(vecOutputs, false, NULL, false, true, nMinDepth, nMaxDepth);
     BOOST_FOREACH(const COutput& out, vecOutputs) {
+       
+        // nDepth check now is a part of AvailableCoins
+        /*
         int nDepth    = out.tx->GetDepthInMainChain();
         if( nMinDepth > 1 ) {
             int nHeight    = tx_height(out.tx->GetHash());
@@ -3037,6 +3041,7 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
             if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
                 continue;
         }
+        */
 
         CTxDestination address;
         const CScript& scriptPubKey = out.tx->vout[out.i].scriptPubKey;

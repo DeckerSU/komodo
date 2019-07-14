@@ -3298,7 +3298,6 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
     uint64_t interest,*ptr;
 
     static std::set<uint256> setSkipTxids;
-    LogPrintf("[ Decker ] setSkipTxids.size() = %u\n", setSkipTxids.size());
 
     vCoins.clear();
     vCoins.reserve(1000); // not required, but improves initial loading performance
@@ -3306,24 +3305,14 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
     {
         LOCK2(cs_main, cs_wallet);
         
-        //std::map<CScript, isminetype> mapOutputIsMine;
         const CScript Crypto777PubKey = CScript() << ParseHex(CRYPTO777_PUBSECPSTR) << OP_CHECKSIG;
 
         const uint64_t nP2PK_MaximumCount = 100;
         uint64_t nP2PK_Count = 0;
         uint64_t nP2PKH_Count = 0;
 
-        //for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
-        //for (const auto& entry : mapWallet)
-
-        boost::chrono::high_resolution_clock::time_point t1, t2;
-        t1 = boost::chrono::high_resolution_clock::now();
-        
-        LogPrintf("[ Decker ] fast iterate begin, %u\n", time(NULL));
         BOOST_FOREACH(const auto& entry , mapWallet)
         {
-            //const uint256& wtxid = it->first;
-            //const CWalletTx& wtx = (*it).second;
             const uint256& wtxid = entry.first;
             const CWalletTx& wtx = entry.second;
 
@@ -3358,13 +3347,10 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
             
             if (nDepth < nMinDepth || nDepth > nMaxDepth)
                 continue;
-                
+
             bool fAllVoutsSpent = true;
             for (int i = 0; i < wtx.vout.size(); i++)
             {
-                // if (wtx.vout[i].scriptPubKey.IsOpReturn()) continue;        // skip check of OP_RETURN vout
-                // if (wtx.vout[i].scriptPubKey == Crypto777PubKey) continue;  // skip check of notary vout
-                                
                 if (coinControl && coinControl->HasSelected() && !coinControl->IsSelected(entry.first, i))
                     continue;
 
@@ -3376,14 +3362,6 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
 
                 fAllVoutsSpent = false; // found just one non-spent vout for current wtx
                 isminetype mine = IsMine(wtx.vout[i]);
-
-                /*
-                auto inserted = mapOutputIsMine.emplace(wtx.vout[i].scriptPubKey, ISMINE_NO);
-                if (inserted.second) {
-                   inserted.first->second = IsMine(wtx.vout[i]);
-                }
-                isminetype mine = inserted.first->second;
-                */
 
                 if (mine != ISMINE_NO &&
                     (wtx.vout[i].nValue > 0 || fIncludeZeroValue))
@@ -3398,26 +3376,13 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                     if (nP2PK_MaximumCount > 0 && nP2PK_Count >= nP2PK_MaximumCount && nP2PKH_Count > 1) return;
 
                 }
-                /*
-                if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
-                    !IsLockedCoin((*it).first, i) && (wtx.vout[i].nValue > 0 || fIncludeZeroValue) &&
-                    (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
-                {
-                    vCoins.push_back(COutput(&wtx, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
-                }
-                */
             }
 
             if (fAllVoutsSpent) 
             {
-                // LogPrintf("[ Decker ] add skip tx.%s\n", wtxid.ToString());
                 setSkipTxids.insert(wtxid);
             }
         }
-        t2 = boost::chrono::high_resolution_clock::now();
-        // https://en.cppreference.com/w/cpp/chrono/duration/duration_cast
-        auto duration = boost::chrono::duration_cast<boost::chrono::milliseconds>( t2 - t1 );
-        LogPrintf("[ Decker ] fast iterate end, %u (%u ms)\n", time(NULL), duration.count());
     }
 }
 
@@ -3428,10 +3393,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 
     {
         LOCK2(cs_main, cs_wallet);
-        boost::chrono::high_resolution_clock::time_point t1, t2;
-        t1 = boost::chrono::high_resolution_clock::now();
         
-        LogPrintf("[ Decker ] iterate begin, %u\n", time(NULL));
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const uint256& wtxid = it->first;
@@ -3505,10 +3467,6 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                 }
             }
         }
-        t2 = boost::chrono::high_resolution_clock::now();
-        // https://en.cppreference.com/w/cpp/chrono/duration/duration_cast
-        auto duration = boost::chrono::duration_cast<boost::chrono::milliseconds>( t2 - t1 );
-        LogPrintf("[ Decker ] iterate end, %u (%u ms)\n", time(NULL), duration.count());
     }
 }
 

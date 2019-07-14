@@ -2959,7 +2959,7 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
 
     if (fHelp || params.size() > 3)
         throw runtime_error(
-            "listunspent ( minconf maxconf  [\"address\",...] )\n"
+            "listunspentfast ( minconf maxconf  [\"address\",...] )\n"
             "\nReturns array of unspent transaction outputs\n"
             "with between minconf and maxconf (inclusive) confirmations.\n"
             "Optionally filter to only include txouts paid to specified addresses.\n"
@@ -3025,24 +3025,10 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
     vector<COutput> vecOutputs;
     assert(pwalletMain != NULL);
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    // pwalletMain->AvailableCoinsFast(vecOutputs, false, NULL, true);
+
     pwalletMain->AvailableCoinsFast(vecOutputs, false, NULL, false, true, nMinDepth, nMaxDepth);
     BOOST_FOREACH(const COutput& out, vecOutputs) {
        
-        // nDepth check now is a part of AvailableCoins
-        /*
-        int nDepth    = out.tx->GetDepthInMainChain();
-        if( nMinDepth > 1 ) {
-            int nHeight    = tx_height(out.tx->GetHash());
-            int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
-            if (dpowconfs < nMinDepth || dpowconfs > nMaxDepth)
-                continue;
-        } else {
-            if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
-                continue;
-        }
-        */
-
         CTxDestination address;
         const CScript& scriptPubKey = out.tx->vout[out.i].scriptPubKey;
         bool fValidAddress = ExtractDestination(scriptPubKey, address);
@@ -3072,27 +3058,9 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
             }
         }
         entry.push_back(Pair("amount", ValueFromAmount(nValue)));
-        /*
-        if ( out.tx->nLockTime != 0 )
-        {
-            BlockMap::iterator it = mapBlockIndex.find(pcoinsTip->GetBestBlock());
-            CBlockIndex *tipindex,*pindex = it->second;
-            uint64_t interest; uint32_t locktime;
-            if ( pindex != 0 && (tipindex= chainActive.LastTip()) != 0 )
-            {
-                interest = komodo_accrued_interest(&txheight,&locktime,out.tx->GetHash(),out.i,0,nValue,(int32_t)tipindex->GetHeight());
-                //interest = komodo_interest(txheight,nValue,out.tx->nLockTime,tipindex->nTime);
-                entry.push_back(Pair("interest",ValueFromAmount(interest)));
-            }
-            //fprintf(stderr,"nValue %.8f pindex.%p tipindex.%p locktime.%u txheight.%d pindexht.%d\n",(double)nValue/COIN,pindex,chainActive.LastTip(),locktime,txheight,pindex->GetHeight());
-        }
-        else if ( chainActive.LastTip() != 0 )
-            txheight = (chainActive.LastTip()->GetHeight() - out.nDepth - 1);
-         */
         entry.push_back(Pair("scriptPubKey", HexStr(scriptPubKey.begin(), scriptPubKey.end())));
         entry.push_back(Pair("rawconfirmations",out.nDepth));
         entry.push_back(Pair("confirmations",out.nDepth));
-        //entry.push_back(Pair("confirmations",komodo_dpowconfs(txheight,out.nDepth)));
         entry.push_back(Pair("spendable", out.fSpendable));
         results.push_back(entry);
     }

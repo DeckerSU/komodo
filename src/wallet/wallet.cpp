@@ -3373,7 +3373,7 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                     if (wtx.vout[i].scriptPubKey.IsPayToPublicKeyHash() && wtx.vout[i].nValue > (10000 * nP2PK_MaximumCount)) nP2PKH_Count++;
                     
                     // we should make sure that we will have at least one P2PKH utxo in listunspent for split
-                    if (nP2PK_MaximumCount > 0 && nP2PK_Count >= nP2PK_MaximumCount && nP2PKH_Count > 1) return;
+                    if (nP2PK_MaximumCount > 0 && nP2PK_Count >= nP2PK_MaximumCount && nP2PKH_Count > 0) return;
 
                 }
             }

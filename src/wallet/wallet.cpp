@@ -3319,7 +3319,7 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
         boost::chrono::high_resolution_clock::time_point t1, t2;
         t1 = boost::chrono::high_resolution_clock::now();
         
-        LogPrintf("[ Decker ] iterate begin, %u\n", time(NULL));
+        LogPrintf("[ Decker ] fast iterate begin, %u\n", time(NULL));
         BOOST_FOREACH(const auto& entry , mapWallet)
         {
             //const uint256& wtxid = it->first;
@@ -3414,7 +3414,7 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
         t2 = boost::chrono::high_resolution_clock::now();
         // https://en.cppreference.com/w/cpp/chrono/duration/duration_cast
         auto duration = boost::chrono::duration_cast<boost::chrono::milliseconds>( t2 - t1 );
-        LogPrintf("[ Decker ] iterate end, %u (%u ms)\n", time(NULL), duration.count());
+        LogPrintf("[ Decker ] fast iterate end, %u (%u ms)\n", time(NULL), duration.count());
     }
 }
 
@@ -3425,6 +3425,10 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 
     {
         LOCK2(cs_main, cs_wallet);
+        boost::chrono::high_resolution_clock::time_point t1, t2;
+        t1 = boost::chrono::high_resolution_clock::now();
+        
+        LogPrintf("[ Decker ] iterate begin, %u\n", time(NULL));
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const uint256& wtxid = it->first;
@@ -3498,6 +3502,10 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                 }
             }
         }
+        t2 = boost::chrono::high_resolution_clock::now();
+        // https://en.cppreference.com/w/cpp/chrono/duration/duration_cast
+        auto duration = boost::chrono::duration_cast<boost::chrono::milliseconds>( t2 - t1 );
+        LogPrintf("[ Decker ] iterate end, %u (%u ms)\n", time(NULL), duration.count());
     }
 }
 

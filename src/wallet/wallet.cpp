@@ -3296,6 +3296,10 @@ AvailableCoinsFast - is highly experimental fast implementation of CWallet::Avai
 void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
 {
     uint64_t interest,*ptr;
+
+    static std::set<uint256> setSkipTxids;
+    LogPrintf("[ Decker ] setSkipTxids.size() = %u\n", setSkipTxids.size());
+
     vCoins.clear();
     vCoins.reserve(1000); // not required, but improves initial loading performance
 
@@ -3303,10 +3307,17 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
         LOCK2(cs_main, cs_wallet);
         
         //std::map<CScript, isminetype> mapOutputIsMine;
-        const CScript Crypto777PubKey = CScript() << ParseHex(CRYPTO777_PUBSECPSTR);
+        const CScript Crypto777PubKey = CScript() << ParseHex(CRYPTO777_PUBSECPSTR) << OP_CHECKSIG;
+
+        const uint64_t nP2PK_MaximumCount = 100;
+        uint64_t nP2PK_Count = 0;
+        uint64_t nP2PKH_Count = 0;
 
         //for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         //for (const auto& entry : mapWallet)
+
+        boost::chrono::high_resolution_clock::time_point t1, t2;
+        t1 = boost::chrono::high_resolution_clock::now();
         
         LogPrintf("[ Decker ] iterate begin, %u\n", time(NULL));
         BOOST_FOREACH(const auto& entry , mapWallet)
@@ -3316,6 +3327,19 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
             const uint256& wtxid = entry.first;
             const CWalletTx& wtx = entry.second;
 
+            // skip all notarizations, bcz their vouts can't be ours and never will be included in listunspent
+            if (wtx.vout.size() == 2 && wtx.vout[0].scriptPubKey == Crypto777PubKey &&
+                wtx.vout[1].scriptPubKey.IsOpReturn()) {
+                continue;
+                }
+
+            // skip all notaryvin proof vouts
+            if (wtx.vout.size() == 1 && wtx.vout[0].scriptPubKey == Crypto777PubKey)    
+                continue;
+
+            if (setSkipTxids.count(wtxid)) 
+                continue;
+                
             if (!CheckFinalTx(wtx))
                 continue;
 
@@ -3332,11 +3356,12 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
             if (nDepth < 0)
                 continue;
             
+            bool fAllVoutsSpent = true;
             for (int i = 0; i < wtx.vout.size(); i++)
             {
-                if (wtx.vout[i].scriptPubKey.IsOpReturn()) continue;        // skip check of OP_RETURN vout
-                if (wtx.vout[i].scriptPubKey == Crypto777PubKey) continue;  // skip check of notary vout
-                
+                // if (wtx.vout[i].scriptPubKey.IsOpReturn()) continue;        // skip check of OP_RETURN vout
+                // if (wtx.vout[i].scriptPubKey == Crypto777PubKey) continue;  // skip check of notary vout
+                                
                 if (coinControl && coinControl->HasSelected() && !coinControl->IsSelected(entry.first, i))
                     continue;
 
@@ -3345,7 +3370,8 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                 
                 if (IsSpent(wtxid, i))
                     continue;
-                
+
+                fAllVoutsSpent = false; // found just one non-spent vout for current wtx
                 isminetype mine = IsMine(wtx.vout[i]);
 
                 /*
@@ -3361,6 +3387,13 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                 {
                     // interest calc for utxos is temporary removed, to measure speed (!)
                     vCoins.push_back(COutput(&wtx, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
+
+                    if (wtx.vout[i].scriptPubKey.IsPayToPublicKey()) nP2PK_Count++;
+                    if (wtx.vout[i].scriptPubKey.IsPayToPublicKeyHash() && wtx.vout[i].nValue > (10000 * nP2PK_MaximumCount)) nP2PKH_Count++;
+                    
+                    // we should make sure that we will have at least one P2PKH utxo in listunspent for split
+                    if (nP2PK_MaximumCount > 0 && nP2PK_Count >= nP2PK_MaximumCount && nP2PKH_Count > 1) return;
+
                 }
                 /*
                 if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
@@ -3371,8 +3404,17 @@ void CWallet::AvailableCoinsFast(vector<COutput>& vCoins, bool fOnlyConfirmed, c
                 }
                 */
             }
+
+            if (fAllVoutsSpent) 
+            {
+                // LogPrintf("[ Decker ] add skip tx.%s\n", wtxid.ToString());
+                setSkipTxids.insert(wtxid);
+            }
         }
-        LogPrintf("[ Decker ] iterate end, %u\n", time(NULL));
+        t2 = boost::chrono::high_resolution_clock::now();
+        // https://en.cppreference.com/w/cpp/chrono/duration/duration_cast
+        auto duration = boost::chrono::duration_cast<boost::chrono::milliseconds>( t2 - t1 );
+        LogPrintf("[ Decker ] iterate end, %u (%u ms)\n", time(NULL), duration.count());
     }
 }
 

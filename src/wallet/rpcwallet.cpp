@@ -3072,6 +3072,7 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
             }
         }
         entry.push_back(Pair("amount", ValueFromAmount(nValue)));
+        /*
         if ( out.tx->nLockTime != 0 )
         {
             BlockMap::iterator it = mapBlockIndex.find(pcoinsTip->GetBestBlock());
@@ -3087,9 +3088,11 @@ UniValue listunspentfast(const UniValue& params, bool fHelp)
         }
         else if ( chainActive.LastTip() != 0 )
             txheight = (chainActive.LastTip()->GetHeight() - out.nDepth - 1);
+         */
         entry.push_back(Pair("scriptPubKey", HexStr(scriptPubKey.begin(), scriptPubKey.end())));
         entry.push_back(Pair("rawconfirmations",out.nDepth));
-        entry.push_back(Pair("confirmations",komodo_dpowconfs(txheight,out.nDepth)));
+        entry.push_back(Pair("confirmations",out.nDepth));
+        //entry.push_back(Pair("confirmations",komodo_dpowconfs(txheight,out.nDepth)));
         entry.push_back(Pair("spendable", out.fSpendable));
         results.push_back(entry);
     }

@@ -168,7 +168,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
     //
 
     auto ctx = librustzcash_sapling_proving_ctx_init();
-
+ 
     // Create Sapling SpendDescriptions
     for (auto spend : spends) {
         auto cm = spend.note.cm();

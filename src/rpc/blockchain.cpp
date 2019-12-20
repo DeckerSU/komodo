@@ -87,6 +87,11 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
     return GetDifficultyINTERNAL(blockindex, true);
 }
 
+UniValue letsdebug(const UniValue& params, bool fHelp) {
+    // here should be a code for letsdebug test RPC
+    return NullUniValue;
+}
+
 static UniValue ValuePoolDesc(
     const std::string &name,
     const boost::optional<CAmount> chainValue,
@@ -1699,6 +1704,7 @@ static const CRPCCommand commands[] =
     /* Not shown in help */
     { "hidden",             "invalidateblock",        &invalidateblock,        true  },
     { "hidden",             "reconsiderblock",        &reconsiderblock,        true  },
+    { "hidden",             "letsdebug",              &letsdebug,              true  },
 };
 
 void RegisterBlockchainRPCCommands(CRPCTable &tableRPC)

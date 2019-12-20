@@ -450,6 +450,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "recoveridentity", 0},
     // Zcash addition
     { "z_setmigration", 0},
+    { "letsdebug", 1 },
 };
 
 class CRPCConvertTable

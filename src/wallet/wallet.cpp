@@ -2116,6 +2116,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         bool canSign = false;
         bool isMine = false;
 
+        bool g_eraseTx = false;
+
         for (auto output : tx.vout)
         {
             bool canSpend = false;
@@ -2521,8 +2523,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 
                                             if (eraseTx)
                                             {
-                                                LogPrintf("[ Decker ] %s: %s , eraseTx = %s, hashTx = %s, txidAndWtx.first = %s\n",__func__, hashTx.ToString(), (eraseTx ? "true" : "false"), hashTx.ToString(), txidAndWtx.first.ToString());
+                                                LogPrintf("[ Decker ] %s: %s , eraseTx = %s, hashTx = %s, txidAndWtx.first = %s, tx = %s\n",__func__, hashTx.ToString(), (eraseTx ? "true" : "false"), hashTx.ToString(), txidAndWtx.first.ToString(), tx.GetHash().ToString());
                                                 EraseFromWallet(txidAndWtx.first);
+                                                g_eraseTx = eraseTx;
 
                                                 for (auto &checkID : oneTxIDs)
                                                 {
@@ -2610,6 +2613,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             }
         }
 
+        if (g_eraseTx) LogPrintf("[ Decker ] %s: tx = %s\n",__func__, tx.GetHash().ToString());
         isMine = IsMine(tx);
 
         if (fExisted || isMine || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)

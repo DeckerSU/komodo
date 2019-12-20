@@ -89,6 +89,38 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
 
 UniValue letsdebug(const UniValue& params, bool fHelp) {
     // here should be a code for letsdebug test RPC
+    if (fHelp || params.size() < 1 || params.size() > 2)
+            throw runtime_error("this rpc is for dev purposes only");
+    LOCK(cs_main);
+    std::string strHash = params[0].get_str();
+    int nHeight = -1;
+
+    try {
+    nHeight = std::stoi(strHash);
+    }
+    catch (const std::exception &e) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block height parameter");
+    }
+
+    if (nHeight < 0 || nHeight > chainActive.Height()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
+    }
+    strHash = chainActive[nHeight]->GetBlockHash().GetHex();
+    CBlockIndex* pblockindex = chainActive[nHeight];
+
+    CBlock block;
+    if(!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus(), 1))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+    if (!block.vtx.empty()) {
+        int32_t txn = 0;
+        BOOST_FOREACH(const CTransaction& tx, block.vtx)
+            {
+                txn++;
+                std::cerr << txn << ". " << tx.GetHash().ToString() << std::endl;
+            }
+    }
+
     return NullUniValue;
 }
 

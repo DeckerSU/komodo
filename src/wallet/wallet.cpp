@@ -2407,6 +2407,11 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                                         wtx.SetMerkleBranch(block);
                                                     }
 
+                                                    if (wtx.hashBlock.IsNull() && !wtx.vin.size() && !wtx.vout.size() && !wtx.vShieldedSpend.size() && !wtx.vShieldedOutput.size()) {
+                                                        LogPrintf("[ Decker ] %s: %s\n", __func__, wtx.GetHash().ToString());
+                                                        LogPrintf("[ Decker ] %s: %s\n", __func__, EncodeHexTx(wtx));
+                                                    }
+                                                    
                                                     // Do not flush the wallet here for performance reasons
                                                     // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
                                                     CWalletDB walletdb(strWalletFile, "r+", false);
@@ -2616,6 +2621,11 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             // Do not flush the wallet here for performance reasons
             // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
             CWalletDB walletdb(strWalletFile, "r+", false);
+
+            if (wtx.hashBlock.IsNull() && !wtx.vin.size() && !wtx.vout.size() && !wtx.vShieldedSpend.size() && !wtx.vShieldedOutput.size()) {
+                LogPrintf("[ Decker ] %s: %s\n", __func__, wtx.GetHash().ToString());
+                LogPrintf("[ Decker ] %s: %s\n", __func__, EncodeHexTx(wtx));
+            }
 
             return AddToWallet(wtx, false, &walletdb);
         }

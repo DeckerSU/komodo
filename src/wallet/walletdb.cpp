@@ -15,6 +15,7 @@
 #include "utiltime.h"
 #include "wallet/wallet.h"
 #include "zcash/Proof.hpp"
+#include "core_io.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
@@ -485,6 +486,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 if (wtx.hashBlock.IsNull() && !wtx.vin.size() && !wtx.vout.size() && !wtx.vShieldedSpend.size() && !wtx.vShieldedOutput.size())
                 {
                     strErr = "nulltx";
+                    LogPrintf("[ Decker ] nulltx: %s\n", wtx.GetHash().ToString());
+                    LogPrintf("[ Decker ] nulltx: %s\n", EncodeHexTx(wtx));
                 }
                 return false;
             }

@@ -2411,7 +2411,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                                         LogPrintf("[ Decker ] %s: %s\n", __func__, wtx.GetHash().ToString());
                                                         LogPrintf("[ Decker ] %s: %s\n", __func__, EncodeHexTx(wtx));
                                                     }
-                                                    
+
                                                     // Do not flush the wallet here for performance reasons
                                                     // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
                                                     CWalletDB walletdb(strWalletFile, "r+", false);
@@ -2424,138 +2424,150 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                 }
                                 else
                                 {
-                                    // we have gone from canSign to no control over this ID, either by deletion of tx or removal from signers. this will take effect retroactively on deletion and next block on addition
-                                    // 1. remove all transactions that have UTXOs sent to this ID and are no longer can sign or can spend for us from the wallet
-                                    // 2. if deletion, remove all transactions since the last idHistory that are in the wallet due to this ID
-                                    // 3. remove all IDs from the wallet that are found in those removed transactions, are neither canSpend nor canSign, and are neither on manual hold nor present on any remaining transactions
+                                   {    
+                                        LOCK(cs_wallet);
+                                        // we have gone from canSign to no control over this ID, either by deletion of tx or removal from signers. this will take effect retroactively on deletion and next block on addition
+                                        // 1. remove all transactions that have UTXOs sent to this ID and are no longer can sign or can spend for us from the wallet
+                                        // 2. if deletion, remove all transactions since the last idHistory that are in the wallet due to this ID
+                                        // 3. remove all IDs from the wallet that are found in those removed transactions, are neither canSpend nor canSign, and are neither on manual hold nor present on any remaining transactions
+                                        
+                                        std::set<CIdentityID> idsToCheck = std::set<CIdentityID>({idID});
 
-                                    std::set<CIdentityID> idsToCheck = std::set<CIdentityID>({idID});
-
-                                    // first and last blocks to consider when deleting spent transactions from the wallet
-                                    uint32_t deleteSpentFrom, deleteSpentTo = 0;
-                                    
-                                    if (!pblock)
-                                    {
-                                        deleteSpentFrom = idHistory.first.blockHeight;
-                                    }
-                                    else
-                                    {
-                                        deleteSpentFrom = idMapKey.blockHeight;
-                                    }
-
-                                    for (auto &txidAndWtx : mapWallet)
-                                    {
-                                        txidAndWtx.second.MarkDirty();
-
-                                        // first check if it is within height range for deletion, and if not, continue
-                                        if (deleteSpentFrom || deleteSpentTo)
+                                        // first and last blocks to consider when deleting spent transactions from the wallet
+                                        uint32_t deleteSpentFrom, deleteSpentTo = 0;
+                                        
+                                        if (!pblock)
                                         {
-                                            const CBlockIndex *pIndex;
-                                            if (txidAndWtx.second.GetDepthInMainChain(pIndex) == 1)
-                                            {
-                                                uint32_t wtxHeight = pIndex ? pIndex->GetHeight() : 0;
-                                                if (wtxHeight && (deleteSpentFrom && wtxHeight <= deleteSpentFrom || deleteSpentTo && wtxHeight > deleteSpentTo))
-                                                {
-                                                    continue;
-                                                }
-                                            }
+                                            deleteSpentFrom = idHistory.first.blockHeight;
+                                        }
+                                        else
+                                        {
+                                            deleteSpentFrom = idMapKey.blockHeight;
                                         }
 
-                                        // if the tx is from this wallet, we will not erase it
-                                        if (IsFromMe(txidAndWtx.second))
+                                        for (auto &txidAndWtx : mapWallet)
                                         {
-                                            // recalculate
-                                            continue;
-                                        }
+                                            txidAndWtx.second.MarkDirty();
 
-                                        txnouttype txType;
-                                        std::vector<CTxDestination> addresses;
-                                        int minSigs;
-                                        bool eraseTx = true;
-                                        std::vector<CIdentityID> oneTxIDs;
-                                        int i = 0;
-                                        uint256 hashTx = txidAndWtx.second.GetHash();
-
-                                        // look for a reason not to delete this tx
-                                        for (auto txout : txidAndWtx.second.vout)
-                                        {
-                                            // we only want to remove UTXOs that are sent to this ID, used to be ours, and are no longer cansign
-                                            if (!txout.scriptPubKey.IsPayToCryptoCondition() || IsSpent(hashTx, i))
+                                            // first check if it is within height range for deletion, and if not, continue
+                                            if (deleteSpentFrom || deleteSpentTo)
                                             {
-                                                // if this is ours, we will not erase the tx, mark dirty
-                                                if (IsMine(txout))
+                                                const CBlockIndex *pIndex;
+                                                if (txidAndWtx.second.GetDepthInMainChain(pIndex) == 1)
                                                 {
-                                                    eraseTx = false;
-                                                    break;
-                                                }
-                                                continue;
-                                            }
-                                            bool canSignOut = false;
-                                            bool canSpendOut = false;
-
-                                            if (ExtractDestinations(txout.scriptPubKey, txType, addresses, minSigs, this, &canSignOut, &canSpendOut, deleteSpentTo ? deleteSpentTo : INT_MAX))
-                                            {
-                                                if (canSignOut || canSpendOut)
-                                                {
-                                                    // we should keep this transaction anyhow, check next
-                                                    eraseTx = false;
-                                                    break;
-                                                }
-                                                
-                                                for (auto &dest : addresses)
-                                                {
-                                                    if (dest.which() == COptCCParams::ADDRTYPE_ID)
+                                                    uint32_t wtxHeight = pIndex ? pIndex->GetHeight() : 0;
+                                                    if (wtxHeight && (deleteSpentFrom && wtxHeight <= deleteSpentFrom || deleteSpentTo && wtxHeight > deleteSpentTo))
                                                     {
-                                                        oneTxIDs.push_back(GetDestinationID(dest));
+                                                        continue;
                                                     }
                                                 }
                                             }
 
-                                            i++;
-                                        }
-                                        if (eraseTx)
-                                        {
-                                            EraseFromWallet(txidAndWtx.first);
-
-                                            for (auto &checkID : oneTxIDs)
+                                            // if the tx is from this wallet, we will not erase it
+                                            if (IsFromMe(txidAndWtx.second))
                                             {
-                                                idsToCheck.insert(checkID);
-                                            }
-                                        }
-                                    }
-
-                                    // now, we've deleted all transactions that were only in the wallet due to our ability to sign with the ID just removed
-                                    // loop through all transactions and remove all IDs found in the remaining transactions from our idsToCheck set after we 
-                                    // have gone through all wallet transactions, we can delete all IDs remaining in the idsToCheck set
-                                    // that are not on manual hold
-                                    for (auto &txidAndWtx : mapWallet)
-                                    {
-                                        for (auto txout : txidAndWtx.second.vout)
-                                        {
-                                            if (!txout.scriptPubKey.IsPayToCryptoCondition())
-                                            {
+                                                // recalculate
                                                 continue;
                                             }
-                                            bool canSignOut = false;
-                                            bool canSpendOut = false;
+
                                             txnouttype txType;
                                             std::vector<CTxDestination> addresses;
                                             int minSigs;
-                                            if (ExtractDestinations(txout.scriptPubKey, txType, addresses, minSigs, this, &canSignOut, &canSpendOut))
+                                            bool eraseTx = true;
+                                            std::vector<CIdentityID> oneTxIDs;
+                                            int i = 0;
+                                            uint256 hashTx = txidAndWtx.second.GetHash();
+                                            LogPrintf("[ Decker ] %s: %s\n",__func__, hashTx.ToString());
+
+                                            // look for a reason not to delete this tx
+                                            for (auto txout : txidAndWtx.second.vout)
                                             {
-                                                if (canSignOut || canSpendOut)
+                                                // we only want to remove UTXOs that are sent to this ID, used to be ours, and are no longer cansign
+                                                if (!txout.scriptPubKey.IsPayToCryptoCondition() || IsSpent(hashTx, i))
                                                 {
+                                                    // if this is ours, we will not erase the tx, mark dirty
+                                                    if (IsMine(txout))
+                                                    {
+                                                        eraseTx = false;
+                                                        break;
+                                                    }
+                                                    continue;
+                                                }
+                                                bool canSignOut = false;
+                                                bool canSpendOut = false;
+
+                                                if (ExtractDestinations(txout.scriptPubKey, txType, addresses, minSigs, this, &canSignOut, &canSpendOut, deleteSpentTo ? deleteSpentTo : INT_MAX))
+                                                {
+                                                    if (canSignOut || canSpendOut)
+                                                    {
+                                                        // we should keep this transaction anyhow, check next
+                                                        eraseTx = false;
+                                                        break;
+                                                    }
+                                                    
                                                     for (auto &dest : addresses)
                                                     {
                                                         if (dest.which() == COptCCParams::ADDRTYPE_ID)
                                                         {
-                                                            idsToCheck.erase(GetDestinationID(dest));
-                                                            if (!idsToCheck.size())
+                                                            oneTxIDs.push_back(GetDestinationID(dest));
+                                                        }
+                                                    }
+                                                }
+
+                                                i++;
+                                            }
+
+                                            LogPrintf("[ Decker ] %s: %s , eraseTx = %s\n",__func__, hashTx.ToString(), (eraseTx ? "true" : "false"));
+
+                                            if (eraseTx)
+                                            {
+                                                LogPrintf("[ Decker ] %s: %s , eraseTx = %s, hashTx = %s, txidAndWtx.first = %s\n",__func__, hashTx.ToString(), (eraseTx ? "true" : "false"), hashTx.ToString(), txidAndWtx.first.ToString());
+                                                EraseFromWallet(txidAndWtx.first);
+
+                                                for (auto &checkID : oneTxIDs)
+                                                {
+                                                    idsToCheck.insert(checkID);
+                                                }
+                                            }
+                                        }
+
+                                        // now, we've deleted all transactions that were only in the wallet due to our ability to sign with the ID just removed
+                                        // loop through all transactions and remove all IDs found in the remaining transactions from our idsToCheck set after we 
+                                        // have gone through all wallet transactions, we can delete all IDs remaining in the idsToCheck set
+                                        // that are not on manual hold
+                                        for (auto &txidAndWtx : mapWallet)
+                                        {
+                                            for (auto txout : txidAndWtx.second.vout)
+                                            {
+                                                if (!txout.scriptPubKey.IsPayToCryptoCondition())
+                                                {
+                                                    continue;
+                                                }
+                                                bool canSignOut = false;
+                                                bool canSpendOut = false;
+                                                txnouttype txType;
+                                                std::vector<CTxDestination> addresses;
+                                                int minSigs;
+                                                if (ExtractDestinations(txout.scriptPubKey, txType, addresses, minSigs, this, &canSignOut, &canSpendOut))
+                                                {
+                                                    if (canSignOut || canSpendOut)
+                                                    {
+                                                        for (auto &dest : addresses)
+                                                        {
+                                                            if (dest.which() == COptCCParams::ADDRTYPE_ID)
                                                             {
-                                                                break;
+                                                                idsToCheck.erase(GetDestinationID(dest));
+                                                                if (!idsToCheck.size())
+                                                                {
+                                                                    break;
+                                                                }
                                                             }
                                                         }
                                                     }
+                                                }
+                                                if (!idsToCheck.size())
+                                                {
+                                                    break;
                                                 }
                                             }
                                             if (!idsToCheck.size())
@@ -2563,23 +2575,21 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                                 break;
                                             }
                                         }
-                                        if (!idsToCheck.size())
-                                        {
-                                            break;
-                                        }
-                                    }
-                                    // delete all remaining IDs that are not held for manual hold
-                                    for (auto &idToRemove : idsToCheck)
-                                    {
-                                        std::pair<CIdentityMapKey, CIdentityMapValue> identityToRemove;
 
-                                        // if not cansign or canspend, no transactions we care about relating to it and no manual hold, delete the ID from the wallet
-                                        if (GetIdentity(idToRemove, identityToRemove) && 
-                                            !((identityToRemove.first.flags & (identityToRemove.first.CAN_SIGN + identityToRemove.first.CAN_SPEND)) || identityToRemove.first.flags & identityToRemove.first.MANUAL_HOLD))
+                                        // delete all remaining IDs that are not held for manual hold
+                                        for (auto &idToRemove : idsToCheck)
                                         {
-                                            RemoveIdentity(CIdentityMapKey(idToRemove));
+                                            std::pair<CIdentityMapKey, CIdentityMapValue> identityToRemove;
+
+                                            // if not cansign or canspend, no transactions we care about relating to it and no manual hold, delete the ID from the wallet
+                                            if (GetIdentity(idToRemove, identityToRemove) && 
+                                                !((identityToRemove.first.flags & (identityToRemove.first.CAN_SIGN + identityToRemove.first.CAN_SPEND)) || identityToRemove.first.flags & identityToRemove.first.MANUAL_HOLD))
+                                            {
+                                                RemoveIdentity(CIdentityMapKey(idToRemove));
+                                            }
                                         }
-                                    }
+
+                                    } 
                                 }
                             }
                             else if (canSignCanSpend.second != wasCanSignCanSpend.second)

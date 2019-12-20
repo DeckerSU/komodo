@@ -2447,6 +2447,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                             deleteSpentFrom = idMapKey.blockHeight;
                                         }
 
+                                        std::vector<uint256> vtxIdsToErase;
+
                                         for (auto &txidAndWtx : mapWallet)
                                         {
                                             txidAndWtx.second.MarkDirty();
@@ -2524,7 +2526,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                             if (eraseTx)
                                             {
                                                 LogPrintf("[ Decker ] %s: %s , eraseTx = %s, hashTx = %s, txidAndWtx.first = %s, tx = %s\n",__func__, hashTx.ToString(), (eraseTx ? "true" : "false"), hashTx.ToString(), txidAndWtx.first.ToString(), tx.GetHash().ToString());
-                                                EraseFromWallet(txidAndWtx.first);
+                                                // EraseFromWallet(txidAndWtx.first);
+                                                vtxIdsToErase.push_back(txidAndWtx.first);
                                                 g_eraseTx = eraseTx;
 
                                                 for (auto &checkID : oneTxIDs)
@@ -2534,6 +2537,12 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                                             }
                                         }
 
+                                        if (vtxIdsToErase.size() > 0) {
+                                            for (const uint256 &txhash : vtxIdsToErase) {
+                                                EraseFromWallet(txhash);
+                                            }
+                                        }
+                                        
                                         // now, we've deleted all transactions that were only in the wallet due to our ability to sign with the ID just removed
                                         // loop through all transactions and remove all IDs found in the remaining transactions from our idsToCheck set after we 
                                         // have gone through all wallet transactions, we can delete all IDs remaining in the idsToCheck set

@@ -23,6 +23,8 @@
 #include "script/sign.h"
 #include "script/standard.h"
 
+#include "wallet/wallet.h"
+
 #include <stdint.h>
 
 #include <univalue.h>
@@ -87,6 +89,7 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
     return GetDifficultyINTERNAL(blockindex, true);
 }
 
+extern CWallet *pwalletMain;
 UniValue letsdebug(const UniValue& params, bool fHelp) {
     // here should be a code for letsdebug test RPC
     if (fHelp || params.size() < 1 || params.size() > 2)
@@ -118,6 +121,8 @@ UniValue letsdebug(const UniValue& params, bool fHelp) {
             {
                 txn++;
                 std::cerr << txn << ". " << tx.GetHash().ToString() << std::endl;
+                pwalletMain->SyncTransaction(tx, &block); // simulate CWallet::SyncTransaction -> AddToWalletIfInvolvingMe call
+
             }
     }
 

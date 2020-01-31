@@ -4320,6 +4320,9 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     // Remove transactions that expire at new block height from mempool
     mempool.removeExpired(pindexNew->GetHeight());
 
+    // Remove transactions that has invalic CC conditions
+    mempool.removeInvalidCC(pindexNew->GetHeight());
+
     // Update chainActive & related variables.
     UpdateTip(pindexNew);
     if ( KOMODO_NSPV_FULLNODE )

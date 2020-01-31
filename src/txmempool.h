@@ -217,6 +217,7 @@ public:
     void removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, int flags);
     void removeConflicts(const CTransaction &tx, std::list<CTransaction>& removed);
     void removeExpired(unsigned int nBlockHeight);
+    void removeInvalidCC(unsigned int nBlockHeight);
     void removeForBlock(const std::vector<CTransaction>& vtx, unsigned int nBlockHeight,
                         std::list<CTransaction>& conflicts, bool fCurrentEstimate = true);
     void removeWithoutBranchId(uint32_t nMemPoolBranchId);

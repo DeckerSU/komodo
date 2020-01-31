@@ -533,6 +533,107 @@ void CTxMemPool::removeExpired(unsigned int nBlockHeight)
     }
 }
 
+#include "cc/CCinclude.h"
+#include "cc/eval.h"
+typedef vector<unsigned char> valtype;
+bool _Getscriptaddress(char *destaddr, const CScript &scriptPubKey);
+bool GetCCByUnspendableAddress(struct CCcontract_info *cp, char *addrstr);
+
+void CTxMemPool::removeInvalidCC(unsigned int nBlockHeight)
+{
+    CBlockIndex *tipindex;
+    // Remove expired txs from the mempool
+    LOCK(cs);
+    list<CTransaction> transactionsToRemove;
+    for (indexed_transaction_set::const_iterator it = mapTx.begin(); it != mapTx.end(); it++)
+    {
+        const CTransaction& tx = it->GetTx();
+        tipindex = chainActive.LastTip();
+                
+        // Check if transaction is CC related
+        int vOutNum = 0;
+        BOOST_FOREACH(const CTxOut& txout, tx.vout) {
+            if (txout.scriptPubKey.IsPayToCryptoCondition())
+            { 
+                /**
+                 * here we should validate cc vout:
+                 * 1. retreive evalcode from vout (?)
+                 * 2. EVAL_FAUCET -> FaucetValidate, EVAL_REWARDS -> RewardsValidate, etc. 
+                 *    mean, for every evalcode call it's own validate proc
+                 */
+                
+                /* look at SignStepCC as an example */
+                CScript subScript;
+                vector<CPubKey> vPK;
+                vector<valtype> vParams = vector<valtype>();
+                COptCCParams p;
+                CCcontract_info C;
+
+                txout.scriptPubKey.IsPayToCryptoCondition(&subScript, vParams);
+                if (vParams.empty())
+                {
+                    char addr[64];
+                    if (_Getscriptaddress(addr, subScript) && GetCCByUnspendableAddress(&C, addr))
+                    {
+                        vPK.push_back(CPubKey(ParseHex(C.CChexstr)));
+                        p = COptCCParams(p.VERSION, C.evalcode, 1, 1, vPK, vParams);
+                    }
+                }
+                else
+                    p = COptCCParams(vParams[0]);
+
+                LogPrint("mempool","%s: Found CC releated vout - tx.%s, vout.%d, evalcodeC.%d, evalcodep.%d\n", __func__, tx.GetHash().ToString(), vOutNum, C.evalcode, p.evalCode);
+
+                // here we should call validate function, retreived from CCcontract_info
+                // or run re-validation proc for this tx somehow else, to be sure that tx 
+                // still valid at current nBlockHeight. if it's invalid we should remove
+                // it from mempool, i.e. push to transactionsToRemove vector.
+
+                bool fIsInvalidCCTx = false;
+
+                // [1]
+                // how to run RunCCEval from here? to run corresponding validate function (*cp->validate)(cp,eval,ctx,nIn) ???
+                // fIsInvalidCCTx = RunCCEval(...);
+                // [2]
+                // or other variant we can do something like code below, for CC sensitive to reorgs
+
+                switch (p.evalCode)
+                {
+                case EVAL_FAUCET:
+                    // eval ???
+                    // FaucetValidate(&С, eval, tx, 0 /* as nIn is not used */)
+                    break;
+                
+                default:
+                    break;
+                }
+
+                /** 
+                 * ServerTransactionSignatureChecker::CheckEvalCondition -> RunCCEval -> eval->Dispatch(cond, tx, nIn)
+                 * Eval::Dispatch -> ProcessCC -> (*cp->validate)(cp,eval,ctx,nIn)
+                 * note, that EVAL_IMPORTPAYOUT, EVAL_IMPORTCOIN have different of ProcessCC behaviour
+                 * 
+                 * bool(*validate)(struct CCcontract_info *cp, Eval* eval, const CTransaction &tx, uint32_t nIn);
+                 * according to CCinclude.h - nIn is not used this time (!)
+                */
+                
+                if (fIsInvalidCCTx) {
+                    transactionsToRemove.push_back(tx);
+                    break;
+                }
+
+                ++vOutNum;
+            }
+        }
+    }
+
+    for (const CTransaction& tx : transactionsToRemove) {
+        list<CTransaction> removed;
+        remove(tx, removed, true);
+        LogPrint("mempool", "Removing invalic cc tx with txid: %s\n", tx.GetHash().ToString());
+    }
+}
+
 /**
  * Called when a block is connected. Removes from mempool and updates the miner fee estimator.
  */

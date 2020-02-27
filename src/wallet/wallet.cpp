@@ -3400,6 +3400,8 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 
     static std::set<uint256> setSkipTxids;
 
+    std::cerr << __func__ << ": fUseSmartCache = " << fUseSmartCache << " setSkipTxids.size() = " << setSkipTxids.size() << std::endl;
+
     {
         LOCK2(cs_main, cs_wallet);
 

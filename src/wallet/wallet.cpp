@@ -3376,52 +3376,103 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
 uint64_t komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
 uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
+/*
+
+1. https://github.com/bitcoin/bitcoin/commit/faa3a246e8809b4954a4a6d202fe8c7f7f776b6e - scripted-diff: wallet: Rename &wtx to wtx
+
+    sed -i --regexp-extended -e 's/const CWalletTx ?\* ?pcoin = &/const CWalletTx\& wtx = /g' src/wallet/wallet.cpp
+    sed -i -e 's/\<pcoin->/wtx./g' src/wallet/wallet.cpp
+    sed -i -e 's/\<pcoin\>/\&wtx/g' src/wallet/wallet.cpp
+
+2. https://github.com/bitcoin/bitcoin/commit/680bc2cbb34d6bedd0e64b17d0555216572be4c8 - Use range-based for loops (C++11) when looping over map elements
+
+*/
+
 void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
 {
     uint64_t interest,*ptr;
     vCoins.clear();
+    vCoins.reserve(1000); // not required, but improves initial loading performance
+
+    const bool fUseSmartCache = GetBoolArg("-usesmartcache", false);
+
+    const CScript Crypto777PubKey = CScript() << ParseHex(CRYPTO777_PUBSECPSTR) << OP_CHECKSIG;
+
+    static std::set<uint256> setSkipTxids;
 
     {
         LOCK2(cs_main, cs_wallet);
-        for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+
+        // for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        BOOST_FOREACH(const auto& entry , mapWallet)
         {
-            const uint256& wtxid = it->first;
-            const CWalletTx* pcoin = &(*it).second;
+            // const uint256& wtxid = it->first;
+            // const CWalletTx* pcoin = &(*it).second;
+            const uint256& wtxid = entry.first;
+            const CWalletTx& wtx = entry.second;
 
-            if (!CheckFinalTx(*pcoin))
+            // skip all notarizations, bcz their vouts can't be ours and never will be included in listunspent
+            // also this will skip notary proof txes (new style, with OP_RETURN)
+            if (fUseSmartCache && wtx.vout.size() == 2 && wtx.vout[0].scriptPubKey == Crypto777PubKey &&
+                wtx.vout[1].scriptPubKey.IsOpReturn())
                 continue;
 
-            if (fOnlyConfirmed && !pcoin->IsTrusted())
+            if (fUseSmartCache && setSkipTxids.count(wtxid))
                 continue;
 
-            if (pcoin->IsCoinBase() && !fIncludeCoinBase)
+            if (!CheckFinalTx(wtx))
                 continue;
 
-            if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
+            if (fOnlyConfirmed && !wtx.IsTrusted())
                 continue;
 
-            int nDepth = pcoin->GetDepthInMainChain();
+            if (wtx.IsCoinBase() && !fIncludeCoinBase)
+                continue;
+
+            if (wtx.IsCoinBase() && wtx.GetBlocksToMaturity() > 0)
+                continue;
+
+            int nDepth = wtx.GetDepthInMainChain();
             if (nDepth < 0)
                 continue;
 
-            for (int i = 0; i < pcoin->vout.size(); i++)
+            bool fAllVoutsSpent = true;
+
+            for (int i = 0; i < wtx.vout.size(); i++)
             {
+                /*
                 isminetype mine = IsMine(pcoin->vout[i]);
                 if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
                     !IsLockedCoin((*it).first, i) && (pcoin->vout[i].nValue > 0 || fIncludeZeroValue) &&
                     (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
+                */
+
+                if (coinControl && coinControl->HasSelected() && !coinControl->IsSelected(entry.first, i))
+                    continue;
+
+                if (IsLockedCoin(entry.first, i))
+                    continue;
+
+                if (IsSpent(wtxid, i))
+                    continue;
+
+                fAllVoutsSpent = false; // found just one non-spent vout for current wtx
+
+                isminetype mine = IsMine(wtx.vout[i]);
+                if (mine != ISMINE_NO &&
+                    (wtx.vout[i].nValue > 0 || fIncludeZeroValue))
                 {
-                    if ( KOMODO_EXCHANGEWALLET == 0 )
+                    if ( KOMODO_EXCHANGEWALLET == 0 && !fUseSmartCache)
                     {
                         uint32_t locktime; int32_t txheight; CBlockIndex *tipindex;
                         if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
                         {
-                            if ( pcoin->vout[i].nValue >= 10*COIN )
+                            if ( wtx.vout[i].nValue >= 10*COIN )
                             {
                                 if ( (tipindex= chainActive.LastTip()) != 0 )
                                 {
-                                    komodo_accrued_interest(&txheight,&locktime,wtxid,i,0,pcoin->vout[i].nValue,(int32_t)tipindex->GetHeight());
-                                    interest = komodo_interestnew(txheight,pcoin->vout[i].nValue,locktime,tipindex->nTime);
+                                    komodo_accrued_interest(&txheight,&locktime,wtxid,i,0,wtx.vout[i].nValue,(int32_t)tipindex->GetHeight());
+                                    interest = komodo_interestnew(txheight,wtx.vout[i].nValue,locktime,tipindex->nTime);
                                 } else interest = 0;
                                 //interest = komodo_interestnew(chainActive.LastTip()->GetHeight()+1,pcoin->vout[i].nValue,pcoin->nLockTime,chainActive.LastTip()->nTime);
                                 if ( interest != 0 )
@@ -3430,30 +3481,35 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                                     //fprintf(stderr,"wallet nValueRet %.8f += interest %.8f ht.%d lock.%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,chainActive.LastTip()->GetHeight()+1,pcoin->nLockTime,chainActive.LastTip()->nTime);
                                     //ptr = (uint64_t *)&pcoin->vout[i].nValue;
                                     //(*ptr) += interest;
-                                    ptr = (uint64_t *)&pcoin->vout[i].interest;
+                                    ptr = (uint64_t *)&wtx.vout[i].interest;
                                     (*ptr) = interest;
                                     //pcoin->vout[i].nValue += interest;
                                 }
                                 else
                                 {
-                                    ptr = (uint64_t *)&pcoin->vout[i].interest;
+                                    ptr = (uint64_t *)&wtx.vout[i].interest;
                                     (*ptr) = 0;
                                 }
                             }
                             else
                             {
-                                ptr = (uint64_t *)&pcoin->vout[i].interest;
+                                ptr = (uint64_t *)&wtx.vout[i].interest;
                                 (*ptr) = 0;
                             }
                         }
                         else
                         {
-                            ptr = (uint64_t *)&pcoin->vout[i].interest;
+                            ptr = (uint64_t *)&wtx.vout[i].interest;
                             (*ptr) = 0;
                         }
                     }
-                    vCoins.push_back(COutput(pcoin, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
+                    vCoins.push_back(COutput(&wtx, i, nDepth, (mine & ISMINE_SPENDABLE) != ISMINE_NO));
                 }
+            }
+
+            if (fUseSmartCache && fAllVoutsSpent)
+            {
+                setSkipTxids.insert(wtxid);
             }
         }
     }

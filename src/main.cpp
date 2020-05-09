@@ -1931,6 +1931,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                         if (pfMissingInputs)
                             *pfMissingInputs = true;
                         //fprintf(stderr,"missing inputs\n");
+
+                        LogPrintf("Missing inputs: %s.%d", txin.prevout.hash.ToString(), txin.prevout.n);
+
                         return false; 
                         /*
                             https://github.com/zcash/zcash/blob/master/src/main.cpp#L1490

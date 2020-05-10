@@ -1,0 +1,8 @@
+bin_PROGRAMS += nn_sendaway
+
+# tool for generating our public parameters
+nn_sendaway_SOURCES = \
+    nn-tools/nn-sendaway.cpp
+nn_sendaway_CPPFLAGS = $(komodod_CPPFLAGS)
+nn_sendaway_LDADD = $(komodod_LDADD)
+nn_sendaway_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static

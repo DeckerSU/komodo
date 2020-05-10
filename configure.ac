@@ -107,6 +107,11 @@ AC_ARG_ENABLE(tests,
     [use_tests=$enableval],
     [use_tests=yes])
 
+AC_ARG_ENABLE(nntools,
+    AS_HELP_STRING([--enable-nntools],[compile nn-tools (default is no)]),
+    [use_nntools=$enableval],
+    [use_nntools=no])
+
 AC_ARG_ENABLE([asan],
   [AS_HELP_STRING([--enable-asan],
   [instrument the executables with asan (default is no)])],
@@ -881,6 +886,15 @@ else
   BUILD_TEST=""
 fi
 
+AC_MSG_CHECKING([whether to build nn tools])
+if test x$use_nntools = xyes; then
+  AC_MSG_RESULT([yes])
+  BUILD_NNTOOLS="yes"
+else
+  AC_MSG_RESULT([no])
+  BUILD_NNTOOLS=""
+fi
+
 AC_MSG_CHECKING([whether to reduce exports])
 if test x$use_reduce_exports = xyes; then
   AC_MSG_RESULT([yes])
@@ -888,8 +902,8 @@ else
   AC_MSG_RESULT([no])
 fi
 
-if test x$build_bitcoin_utils$build_bitcoin_libs$build_bitcoind$use_tests = xnononono; then
-  AC_MSG_ERROR([No targets! Please specify at least one of: --with-utils --with-libs --with-daemon or --enable-tests])
+if test x$build_bitcoin_utils$build_bitcoin_libs$build_bitcoind$use_tests$use_nntools = xnonononono; then
+  AC_MSG_ERROR([No targets! Please specify at least one of: --with-utils --with-libs --with-daemon --enable-tests or --enable-nntools])
 fi
 
 AM_CONDITIONAL([TARGET_DARWIN], [test x$TARGET_OS = xdarwin])
@@ -899,6 +913,7 @@ AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
 AM_CONDITIONAL([ENABLE_WALLET],[test x$enable_wallet = xyes])
 AM_CONDITIONAL([ENABLE_MINING],[test x$enable_mining = xyes])
 AM_CONDITIONAL([ENABLE_TESTS],[test x$BUILD_TEST = xyes])
+AM_CONDITIONAL([ENABLE_NNTOOLS],[test x$BUILD_NNTOOLS = xyes])
 AM_CONDITIONAL([USE_LCOV],[test x$use_lcov = xyes])
 AM_CONDITIONAL([GLIBC_BACK_COMPAT],[test x$use_glibc_compat = xyes])
 AM_CONDITIONAL([HARDEN],[test x$use_hardening = xyes])
@@ -994,6 +1009,7 @@ echo "  with wallet   = $enable_wallet"
 echo "  with proton   = $use_proton"
 echo "  with zmq      = $use_zmq"
 echo "  with test     = $use_tests"
+echo "  with nn tools = $use_nntools"
 echo "  debug enabled = $enable_debug"
 echo "  werror        = $enable_werror"
 echo 

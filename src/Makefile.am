@@ -791,3 +791,7 @@ include Makefile.ktest.include
 #include Makefile.test.include
 #include Makefile.gtest.include
 endif
+
+if ENABLE_NNTOOLS
+include Makefile.nntools.include
+endif

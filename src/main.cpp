@@ -3548,14 +3548,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     CBlockUndo blockundo;
 
-    if ( ASSETCHAINS_CC != 0 )
+    /* if ( ASSETCHAINS_CC != 0 )
     {
         if ( scriptcheckqueue.IsIdle() == 0 )
         {
             fprintf(stderr,"scriptcheckqueue isnt idle\n");
             sleep(1);
         }
-    }
+    } */
     CCheckQueueControl<CScriptCheck> control(fExpensiveChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
 
     int64_t nTimeStart = GetTimeMicros();

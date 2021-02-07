@@ -1,9 +1,9 @@
 package=googletest
-$(package)_version=1.8.0
-$(package)_download_path=https://github.com/google/$(package)/archive
+$(package)_version=1.8.1
+$(package)_download_path=https://github.com/google/$(package)/archive/
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_download_file=release-$($(package)_version).tar.gz
-$(package)_sha256_hash=58a6f4277ca2bc8565222b3bbd58a177609e9c488e8a72649359ba51450db7d8
+$(package)_sha256_hash=9bf1fe5182a604b4135edc1a425ae356c9ad15e9b23f9f12a02e80184c3a249c
 
 define $(package)_set_vars
 $(package)_cxxflags+=-std=c++11
@@ -25,10 +25,17 @@ endef
 else
 $(package)_install=install
 
+ifeq ($(build_os)$(host_os),linuxdarwin) # cross-compile for MacOS from Linux
+define $(package)_build_cmds
+  $(MAKE) -C googlemock/make CC="$(build_prefix)/bin/$($(package)_cc)" CXX="$(build_prefix)/bin/$($(package)_cxx)" AR="$(build_prefix)/bin/$($(package)_ar)" CXXFLAGS="$($(package)_cxxflags)" gmock.a && \
+  $(MAKE) -C googletest/make CC="$(build_prefix)/bin/$($(package)_cc)" CXX="$(build_prefix)/bin/$($(package)_cxx)" AR="$(build_prefix)/bin/$($(package)_ar)" CXXFLAGS="$($(package)_cxxflags)" gtest.a
+endef
+else
 define $(package)_build_cmds
   $(MAKE) -C googlemock/make CC="$($(package)_cc)" CXX="$($(package)_cxx)" AR="$($(package)_ar)" CXXFLAGS="$($(package)_cxxflags)" gmock.a && \
   $(MAKE) -C googletest/make CC="$($(package)_cc)" CXX="$($(package)_cxx)" AR="$($(package)_ar)" CXXFLAGS="$($(package)_cxxflags)" gtest.a
 endef
+endif
 endif
 
 define $(package)_stage_cmds

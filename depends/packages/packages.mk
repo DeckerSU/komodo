@@ -43,29 +43,14 @@ rust_crates := \
   crate_winapi_x86_64_pc_windows_gnu
 
 rust_packages := rust $(rust_crates) librustzcash
-native_packages := native_cctools native_ccache # native_rust
+native_packages := native_ccache
 
 wallet_packages=bdb
 
-ifeq ($(host_os),linux)
-	packages := boost openssl libevent zeromq $(zcash_packages) googletest libcurl #googlemock
-else
-	packages := boost openssl libevent zeromq $(zcash_packages) libcurl googletest #googlemock
-endif
+packages := boost openssl libevent zeromq $(zcash_packages) googletest libcurl
 
-# $(host_arch)_$(host_os)_native_packages += native_b2
-
-# ifneq ($(build_os),darwin)
-# darwin_native_packages=native_cctools
-# endif
-
-# ifneq ($(host_os),darwin)
-# packages += libcxx
-# endif
-
-# darwin_native_packages = native_biplist native_ds_store native_mac_alias
 ifneq ($(build_os),darwin)
-darwin_native_packages += native_cctools # native_cdrkit native_libdmg-hfsplus
+darwin_native_packages += native_cctools
 ifeq ($(host_os),darwin)
 packages += libsnark
 endif

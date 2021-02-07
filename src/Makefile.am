@@ -279,6 +279,8 @@ libbitcoin_util_a-clientversion.$(OBJEXT): obj/build.h
 
 # server: zcashd
 libbitcoin_server_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
+# server: built-in cclib with custom cclib
+libbitcoin_server_a_CPPFLAGS += -DBUILD_CUSTOMCC
 libbitcoin_server_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_server_a_SOURCES = \
   sendalert.cpp \
@@ -353,6 +355,7 @@ libbitcoin_server_a_SOURCES = \
   txdb.cpp \
   txmempool.cpp \
   validationinterface.cpp \
+  cc/cclib.cpp \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
@@ -593,33 +596,35 @@ komodod_LDADD += \
   $(LIBVERUS_PORTABLE_CRYPTO) \
   $(LIBZCASH_LIBS)
 
-if TARGET_DARWIN
-komodod_LDADD += libcc.dylib $(LIBSECP256K1)
-endif
-if TARGET_WINDOWS
-komodod_LDADD += libcc.dll $(LIBSECP256K1)
-endif
-if TARGET_LINUX
-komodod_LDADD += libcc.so $(LIBSECP256K1)
-endif
+#if TARGET_DARWIN
+#komodod_LDADD += libcc.dylib $(LIBSECP256K1)
+#endif
+#if TARGET_WINDOWS
+#komodod_LDADD += libcc.dll $(LIBSECP256K1)
+#endif
+#if TARGET_LINUX
+#komodod_LDADD += libcc.so $(LIBSECP256K1)
+#endif
+komodod_LDADD += $(LIBSECP256K1)
 
 if ENABLE_PROTON
 komodod_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
 endif
 
 # [+] Decker: use static linking for libstdc++.6.dylib, libgomp.1.dylib, libgcc_s.1.dylib
-if TARGET_DARWIN
-komodod_LDFLAGS += -static-libgcc
-endif
+# if TARGET_DARWIN
+# komodod_LDFLAGS += -static-libgcc
+# endif
 
 # bitcoin-cli binary #
 komodo_cli_SOURCES = bitcoin-cli.cpp
 komodo_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
 komodo_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 komodo_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-if TARGET_DARWIN
-komodo_cli_LDFLAGS += -static-libgcc
-endif
+
+# if TARGET_DARWIN
+# komodo_cli_LDFLAGS += -static-libgcc
+# endif
 
 # wallet-utility binary #
 if ENABLE_WALLET
@@ -710,7 +715,10 @@ libzcash_a_SOURCES = \
 	zcash/circuit/prfs.tcc \
 	zcash/circuit/utils.tcc
 
-libzcash_a_CPPFLAGS = -DMULTICORE -fopenmp -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) $(HARDENED_CXXFLAGS) $(HARDENED_LDFLAGS) -pipe $(SAN_LDFLAGS) -O1 -g -Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES)
+libzcash_a_CPPFLAGS = -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) $(HARDENED_CXXFLAGS) $(HARDENED_LDFLAGS) -pipe $(SAN_LDFLAGS) -O1 -g -Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES)
+if HAVE_OPENMP
+libzcash_a_CPPFLAGS += -DMULTICORE -fopenmp
+endif
 
 #libzcash_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 #libzcash_a_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)

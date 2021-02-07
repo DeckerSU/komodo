@@ -10,6 +10,9 @@ $(package)_config_opts=--disable-shared --enable-cxx --disable-replication
 $(package)_config_opts_mingw32=--enable-mingw
 $(package)_config_opts_linux=--with-pic
 $(package)_cxxflags=-std=c++11
+ifneq ($(build_os),darwin)
+$(package)_config_opts_darwin=--disable-atomicsupport
+endif
 endef
 
 define $(package)_preprocess_cmds

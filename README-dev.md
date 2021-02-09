@@ -49,6 +49,19 @@ make V=1 -j$(nproc --all)
 
 ```
 
+### Steps to build (Linux x64)
+
+```
+# x86_64-unknown-linux-gnu (x86_64-pc-linux-gnu alias is not supported, use unknown, instead of pc)
+cd komodo
+make -C ${PWD}/depends V=1 NO_QT=1 HOST=x86_64-unknown-linux-gnu -j$(nproc) -j$(nproc --all)
+./autogen.sh
+# CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -fopenmp -pthread"
+# ./configure --prefix=$(pwd)/depends/x86_64-unknown-linux-gnu --disable-tests --disable-bench --with-gui=no
+CONFIG_SITE="$PWD/depends/x86_64-unknown-linux-gnu/share/config.site" CXXFLAGS="-DCURL_STATICLIB" ./configure --disable-tests --disable-bench -with-gui=no
+make V=1 -j$(nproc --all)
+```
+
 ### Useful links
 
 - https://en.wikipedia.org/wiki/Darwin_(operating_system) (Darwin 18 -> macOS Mojave iOS 12)

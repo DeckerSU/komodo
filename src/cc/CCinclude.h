@@ -73,6 +73,8 @@ Details.
 #include "../komodo_cJSON.h"
 #include "../init.h"
 #include "rpc/server.h"
+#include "arith_uint256.h"
+#include <limits>
 
 #define CC_BURNPUBKEY "02deaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead" //!< 'dead' pubkey in hex for burning tokens (if tokens are sent to it, they become 'burned')
 /// \cond INTERNAL

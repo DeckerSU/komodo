@@ -23,6 +23,26 @@
 #include <boost/thread.hpp>
 #endif
 
+int32_t bitcoin_base58decode(uint8_t *data,char *coinaddr)
+{
+    std::vector<unsigned char> vch;
+    if (DecodeBase58(coinaddr, vch)) {
+        for (int i = 0; i < vch.size(); i++) data[i] = vch[i]; // std::memcpy(data, vch.data(), vch.size());
+        return vch.size();
+    } else
+        return -1;
+};
+
+char *bitcoin_base58encode(char *coinaddr,uint8_t *data,int32_t datalen) {
+    std::vector<unsigned char> vch(data, data + datalen);
+    std::string strBase58 = EncodeBase58(vch);
+    if (!strBase58.empty()) {
+        strcpy(coinaddr, strBase58.c_str());
+    } else
+        coinaddr[0] = 0;
+    return coinaddr;
+};
+
 #define SATOSHIDEN ((uint64_t)100000000L)
 #define dstr(x) ((double)(x) / SATOSHIDEN)
 #define portable_mutex_t pthread_mutex_t
@@ -41,8 +61,6 @@ typedef struct queue
 	pthread_mutex_t mutex;
     char name[64],initflag;
 } queue_t;
-
-#include "mini-gmp.c"
 
 #define CRYPTO777_PUBSECPSTR "020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9"
 #define CRYPTO777_KMDADDR "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"

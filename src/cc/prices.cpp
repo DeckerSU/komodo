@@ -73,7 +73,6 @@ GetKomodoEarlytxidScriptPub is on line #2080 of komodo_bitcoind.h
 #include "CCPrices.h"
 
 #include <cstdlib>
-#include <gmp.h>
 
 #define IS_CHARINSTR(c, str) (std::string(str).find((char)(c)) != std::string::npos)
 
@@ -972,30 +971,21 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
     uint16_t opcode;
     int64_t *pricedata, pricestack[4], a, b, c;
 
-    mpz_t mpzTotalPrice, mpzPriceValue, mpzDen, mpzA, mpzB, mpzC, mpzResult;
-
-    mpz_init(mpzTotalPrice);
-    mpz_init(mpzPriceValue);
-    mpz_init(mpzDen);
-
-    mpz_init(mpzA);
-    mpz_init(mpzB);
-    mpz_init(mpzC);
-    mpz_init(mpzResult);
+    arith_uint256 au256TotalPrice(0), au256PriceValue(0), au256Den(0), au256A(0), au256B(0), au256C(0), au256Result(0);
 
     pricedata = (int64_t *)calloc(sizeof(*pricedata) * 3, 1 + PRICES_DAYWINDOW * 2 + PRICES_SMOOTHWIDTH);
     depth = errcode = 0;
-    mpz_set_si(mpzTotalPrice, 0);
-    mpz_set_si(mpzDen, 0);
+    au256TotalPrice = 0;
+    au256Den = 0;
 
     for (i = 0; i < vec.size(); i++)
     {
         opcode = vec[i];
         value = (opcode & (KOMODO_MAXPRICES - 1));   // index or weight 
 
-        mpz_set_ui(mpzResult, 0);  // clear result to test overflow (see below)
+        au256Result = 0;  // clear result to test overflow (see below)
 
-        //std::cerr << "prices_syntheticprice" << " i=" << i << " mpzTotalPrice=" << mpz_get_si(mpzTotalPrice) << " value=" << value << " depth=" << depth <<  " opcode&KOMODO_PRICEMASK=" << (opcode & KOMODO_PRICEMASK) <<std::endl;
+        //std::cerr << "prices_syntheticprice" << " i=" << i << " au256TotalPrice=" << au256TotalPrice.GetLow64() << " value=" << value << " depth=" << depth <<  " opcode&KOMODO_PRICEMASK=" << (opcode & KOMODO_PRICEMASK) <<std::endl;
         switch (opcode & KOMODO_PRICEMASK)
         {
         case 0: // indices 
@@ -1029,12 +1019,12 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
             if (depth == 1) {
                 depth--;
                 // price += pricestack[0] * value;
-                mpz_set_si(mpzPriceValue, pricestack[0]);
-                mpz_mul_si(mpzPriceValue, mpzPriceValue, value);
-                mpz_add(mpzTotalPrice, mpzTotalPrice, mpzPriceValue);              // accumulate weight's value  
+                au256PriceValue = pricestack[0];
+                au256PriceValue = au256PriceValue * value;
+                au256TotalPrice = au256TotalPrice + au256PriceValue; // accumulate weight's value
 
                 // den += value; 
-                mpz_add_ui(mpzDen, mpzDen, (uint64_t)value);              // accumulate weight's value  
+                au256Den = au256Den + (uint64_t)value; // accumulate weight's value
             }
             else
                 errcode = -2;
@@ -1045,11 +1035,11 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
                 b = pricestack[--depth];
                 a = pricestack[--depth];
                 // pricestack[depth++] = (a * b) / SATOSHIDEN;
-                mpz_set_si(mpzA, a);
-                mpz_set_si(mpzB, b);
-                mpz_mul(mpzResult, mpzA, mpzB);
-                mpz_tdiv_q_ui(mpzResult, mpzResult, SATOSHIDEN);
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a;
+                au256B = b;
+                au256Result = au256A * au256B;
+                au256Result = au256Result / SATOSHIDEN;
+                pricestack[depth++] = au256Result.GetLow64();
 
             }
             else
@@ -1061,11 +1051,11 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
                 b = pricestack[--depth];
                 a = pricestack[--depth];
                 // pricestack[depth++] = (a * SATOSHIDEN) / b;
-                mpz_set_si(mpzA, a);
-                mpz_set_si(mpzB, b);
-                mpz_mul_ui(mpzResult, mpzA, SATOSHIDEN);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzB);                 
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a;
+                au256B = b;
+                au256Result = au256A * SATOSHIDEN;
+                au256Result = au256Result / au256B;
+                pricestack[depth++] = au256Result.GetLow64();
             }
             else
                 errcode = -4;
@@ -1075,11 +1065,11 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
             if (depth >= 1) {
                 a = pricestack[--depth];
                 // pricestack[depth++] = (SATOSHIDEN * SATOSHIDEN) / a;
-                mpz_set_si(mpzA, a);
-                mpz_set_ui(mpzResult, SATOSHIDEN);
-                mpz_mul_ui(mpzResult, mpzResult, SATOSHIDEN);           
-                mpz_tdiv_q(mpzResult, mpzResult, mpzA);                 
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a;
+                au256Result = SATOSHIDEN;
+                au256Result =  au256Result * SATOSHIDEN;
+                au256Result = au256Result / au256A;
+                pricestack[depth++] = au256Result.GetLow64();
             }
             else
                 errcode = -5;
@@ -1091,14 +1081,12 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
                 b = pricestack[--depth];
                 a = pricestack[--depth];
                 // pricestack[depth++] = (((a * SATOSHIDEN) / b) * SATOSHIDEN) / c;
-                mpz_set_si(mpzA, a);
-                mpz_set_si(mpzB, b);
-                mpz_set_si(mpzC, c);
-                mpz_mul_ui(mpzResult, mpzA, SATOSHIDEN);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzB);                 
-                mpz_mul_ui(mpzResult, mpzResult, SATOSHIDEN);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzC);
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a; au256B = b; au256C = c;
+                au256Result =  au256A * SATOSHIDEN;
+                au256Result = au256Result / au256B;
+                au256Result =  au256Result * SATOSHIDEN;
+                au256Result = au256Result / au256C;
+                pricestack[depth++] =au256Result.GetLow64();
             }
             else
                 errcode = -6;
@@ -1110,12 +1098,10 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
                 b = pricestack[--depth];
                 a = pricestack[--depth];
                 // pricestack[depth++] = (a * b) / c;
-                mpz_set_si(mpzA, a);
-                mpz_set_si(mpzB, b);
-                mpz_set_si(mpzC, c);
-                mpz_mul(mpzResult, mpzA, mpzB);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzC);
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a; au256B = b; au256C = c;
+                au256Result =  au256A * au256B;
+                au256Result = au256Result / au256C;
+                pricestack[depth++] = au256Result.GetLow64();
             }
             else
                 errcode = -7;
@@ -1127,14 +1113,12 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
                 b = pricestack[--depth];
                 a = pricestack[--depth];
                 // pricestack[depth++] = (((a * b) / SATOSHIDEN ) * c) / SATOSHIDEN;
-                mpz_set_si(mpzA, a);
-                mpz_set_si(mpzB, b);
-                mpz_set_si(mpzC, c);
-                mpz_mul(mpzResult, mpzA, mpzB);
-                mpz_tdiv_q_ui(mpzResult, mpzResult, SATOSHIDEN);
-                mpz_mul(mpzResult, mpzResult, mpzC);
-                mpz_tdiv_q_ui(mpzResult, mpzResult, SATOSHIDEN);
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a; au256B = b; au256C = c;
+                au256Result =  au256A * au256B;
+                au256Result = au256Result / SATOSHIDEN;
+                au256Result = au256Result * au256C;
+                au256Result = au256Result / SATOSHIDEN;
+                pricestack[depth++] = au256Result.GetLow64();
             }
             else
                 errcode = -8;
@@ -1146,17 +1130,15 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
                 b = pricestack[--depth];
                 a = pricestack[--depth];
                 //pricestack[depth++] = (((((SATOSHIDEN * SATOSHIDEN) / a) * SATOSHIDEN) / b) * SATOSHIDEN) / c;
-                mpz_set_si(mpzA, a);
-                mpz_set_si(mpzB, b);
-                mpz_set_si(mpzC, c);
-                mpz_set_ui(mpzResult, SATOSHIDEN);
-                mpz_mul_ui(mpzResult, mpzResult, SATOSHIDEN);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzA);
-                mpz_mul_ui(mpzResult, mpzResult, SATOSHIDEN);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzB);
-                mpz_mul_ui(mpzResult, mpzResult, SATOSHIDEN);
-                mpz_tdiv_q(mpzResult, mpzResult, mpzC);
-                pricestack[depth++] = mpz_get_si(mpzResult);
+                au256A = a; au256B = b; au256C = c;
+                au256Result = SATOSHIDEN;
+                au256Result = au256Result * SATOSHIDEN;
+                au256Result = au256Result / au256A;
+                au256Result = au256Result * SATOSHIDEN;
+                au256Result = au256Result / au256B;
+                au256Result = au256Result * SATOSHIDEN;
+                au256Result = au256Result / au256C;
+                pricestack[depth++] = au256Result.GetLow64();
             }
             else
                 errcode = -9;
@@ -1167,9 +1149,9 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
             break;
         }
 
- //       std::cerr << "prices_syntheticprice test mpzResult=" << mpz_get_si(mpzResult) << std::endl;
+ //       std::cerr << "prices_syntheticprice test au256Result=" << au256Result.GetLow64() << std::endl;
         // check overflow:
-        if (mpz_cmp_si(mpzResult, std::numeric_limits<int64_t>::max()) > 0) {
+        if ( au256Result.CompareTo(arith_uint256(std::numeric_limits<int64_t>::max()) > 0) ) {
             errcode = -13;
             break;
         }
@@ -1184,20 +1166,12 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
 
     }
     free(pricedata);
-    mpz_clear(mpzResult);
-    mpz_clear(mpzA);
-    mpz_clear(mpzB);
-    mpz_clear(mpzC);
 
-    if( mpz_get_si(mpzDen) != 0 )
-        mpz_tdiv_q(mpzTotalPrice, mpzTotalPrice, mpzDen);   // price / den
+    if( au256Den.GetLow64() != 0 )
+       au256TotalPrice = au256TotalPrice / au256Den;   // price / den
     
-    int64_t den = mpz_get_si(mpzDen);
-    int64_t priceIndex = mpz_get_si(mpzTotalPrice);
-
-    mpz_clear(mpzDen);
-    mpz_clear(mpzTotalPrice);
-    mpz_clear(mpzPriceValue);
+    int64_t den = au256Den.GetLow64();
+    int64_t priceIndex = au256TotalPrice.GetLow64();
 
     if (errcode != 0) 
         std::cerr << "prices_syntheticprice errcode in switch=" << errcode << std::endl;
@@ -1305,34 +1279,21 @@ int32_t prices_syntheticprofits(int64_t &costbasis, int32_t firstheight, int32_t
     //std::cerr << "prices_syntheticprofits() dprofits=" << dprofits << std::endl;
 
     if (costbasis > 0)  {
-        mpz_t mpzProfits;
-        mpz_t mpzCostbasis;
-        mpz_t mpzPrice;
-        mpz_t mpzLeverage;
+        arith_uint256 au256Profits(0), au256Costbasis(0), au256Price(0), au256Leverage(0);
 
-        mpz_init(mpzProfits);
-        mpz_init(mpzCostbasis);
-        mpz_init(mpzPrice);
-        mpz_init(mpzLeverage);
+        au256Costbasis = costbasis;
+        au256Price = price;
+        au256Price = au256Price * SATOSHIDEN;                              // (price*SATOSHIDEN)
 
-        mpz_set_si(mpzCostbasis, costbasis);
-        mpz_set_si(mpzPrice, price);
-        mpz_mul_ui(mpzPrice, mpzPrice, SATOSHIDEN);                              // (price*SATOSHIDEN)
+        au256Profits =  au256Price / au256Costbasis;           // profits = (price*SATOSHIDEN)/costbasis  // normalization
+        au256Profits = au256Profits - SATOSHIDEN;                          // profits -= SATOSHIDEN
 
-        mpz_tdiv_q(mpzProfits, mpzPrice, mpzCostbasis);           // profits = (price*SATOSHIDEN)/costbasis  // normalization
-        mpz_sub_ui(mpzProfits, mpzProfits, SATOSHIDEN);                          // profits -= SATOSHIDEN
+        au256Leverage = leverage;
+        au256Profits = au256Profits * au256Leverage;                            // profits *= leverage
+        au256Profits = au256Profits * positionsize;                        // profits *= positionsize
+        au256Profits = au256Profits / SATOSHIDEN;          // profits /= SATOSHIDEN   // de-normalization
 
-        mpz_set_si(mpzLeverage, leverage);
-        mpz_mul(mpzProfits, mpzProfits, mpzLeverage);                            // profits *= leverage
-        mpz_mul_ui(mpzProfits, mpzProfits, positionsize);                        // profits *= positionsize
-        mpz_tdiv_q_ui(mpzProfits, mpzProfits, SATOSHIDEN);          // profits /= SATOSHIDEN   // de-normalization
-
-        profits = mpz_get_si(mpzProfits);
-
-        mpz_clear(mpzLeverage);
-        mpz_clear(mpzProfits);
-        mpz_clear(mpzCostbasis);
-        mpz_clear(mpzPrice);
+        profits = au256Profits.GetLow64();
 
     }
     else
@@ -1800,58 +1761,42 @@ int32_t prices_getbetinfo(uint256 bettxid, BetInfo &betinfo)
                 return -4;
             }
 
-            mpz_t mpzTotalPosition;
-            mpz_t mpzTotalprofits;
-            mpz_t mpzTotalcostbasis;
-
-            mpz_init(mpzTotalPosition);
-            mpz_init(mpzTotalprofits);
-            mpz_init(mpzTotalcostbasis);
+            arith_uint256 au256TotalPosition(0),  au256Totalprofits(0), au256Totalcostbasis(0);
 
             int64_t totalposition = 0;
             int64_t totalprofits = 0;
 
             for (auto b : betinfo.bets) {
-                mpz_t mpzProduct;
-                mpz_t mpzProfits;
-
-                mpz_init(mpzProduct);
-                mpz_init(mpzProfits);
+                arith_uint256 au256Product(0), au256Profits(0);
 
                 //totalprofits += b.profits;
                 //dcostbasis += b.amount * (double)b.costbasis;  
                 // costbasis += b.amount * (b.costbasis / PRICES_POINTFACTOR);  // prevent int64 overflow (but we have underflow for 1/BTC)
                 // std::cerr << "PricesInfo() acc dcostbasis=" << dcostbasis << " b.amount=" << b.amount << " b.costbasis/PRICES_POINTFACTOR=" << (b.costbasis / PRICES_POINTFACTOR) << std::endl;
                 //std::cerr << "PricesInfo() acc dcostbasis=" << dcostbasis << " b.amount=" << b.amount << " b.costbasis/PRICES_POINTFACTOR=" << (b.costbasis / PRICES_POINTFACTOR) << std::endl;
-                mpz_set_ui(mpzProduct, b.costbasis);
-                mpz_mul_ui(mpzProduct, mpzProduct, (uint64_t)b.positionsize);         // b.costbasis * b.amount
-                mpz_add(mpzTotalcostbasis, mpzTotalcostbasis, mpzProduct);      //averageCostbasis += b.costbasis * b.amount;
+                au256Product = b.costbasis;
+                au256Product = au256Product * (uint64_t)b.positionsize;         // b.costbasis * b.amount
+                au256Totalcostbasis = au256Totalcostbasis + au256Product;      //averageCostbasis += b.costbasis * b.amount;
 
-                mpz_add_ui(mpzTotalPosition, mpzTotalPosition, (uint64_t)b.positionsize);     //totalposition += b.amount;
-                mpz_add(mpzTotalprofits, mpzTotalprofits, mpzProfits);          //totalprofits += b.profits;
+                au256TotalPosition = au256TotalPosition + (uint64_t)b.positionsize;     //totalposition += b.amount;
+                au256Totalprofits = au256Totalprofits + au256Profits;          //totalprofits += b.profits;
 
                 totalposition += b.positionsize;
                 totalprofits += b.profits;
-
-                mpz_clear(mpzProduct);
-                mpz_clear(mpzProfits);
             }
 
             betinfo.equity = totalposition + totalprofits;
             //int64_t averageCostbasis = 0;
 
-            if (mpz_get_ui(mpzTotalPosition) != 0) { //prevent zero div
-                mpz_t mpzAverageCostbasis;
-                mpz_init(mpzAverageCostbasis);
+            if (au256TotalPosition.GetLow64() != 0) { //prevent zero div
+                arith_uint256 au256AverageCostbasis(0);
 
                 //averageCostbasis =  totalcostbasis / totalposition; 
-                mpz_mul_ui(mpzTotalcostbasis, mpzTotalcostbasis, SATOSHIDEN);                 // profits *= SATOSHIDEN normalization to prevent loss of significance while division
-                mpz_tdiv_q(mpzAverageCostbasis, mpzTotalcostbasis, mpzTotalPosition);
+                au256AverageCostbasis = au256AverageCostbasis * SATOSHIDEN;                 // profits *= SATOSHIDEN normalization to prevent loss of significance while division
+                au256AverageCostbasis = au256Totalcostbasis / au256TotalPosition;
+                au256AverageCostbasis = au256AverageCostbasis / SATOSHIDEN;          // profits /= SATOSHIDEN de-normalization
 
-                mpz_tdiv_q_ui(mpzAverageCostbasis, mpzAverageCostbasis, SATOSHIDEN);          // profits /= SATOSHIDEN de-normalization
-
-                betinfo.averageCostbasis = mpz_get_ui(mpzAverageCostbasis);
-                mpz_clear(mpzAverageCostbasis);
+                betinfo.averageCostbasis = au256AverageCostbasis.GetLow64();
             }
 
             betinfo.liquidationprice = 0;
@@ -1870,9 +1815,6 @@ int32_t prices_getbetinfo(uint256 bettxid, BetInfo &betinfo)
                 }
             }
 
-            mpz_clear(mpzTotalPosition);
-            mpz_clear(mpzTotalprofits);
-            mpz_clear(mpzTotalcostbasis);
             return 0;
         }
         return -3;

@@ -777,7 +777,7 @@ UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
                             free_json(params);
                         return(result);
                     }
-                    // set totalallocations to a mpz_t bignum, for amounts calculation later. 
+                    // set totalallocations to a arith_uint256 bignum, for amounts calculation later.
                     au256TotalAllocations = totalallocations;
                 }
                 else if ( funcid == 'S' || funcid == 'O' )
@@ -889,7 +889,7 @@ UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
                     totalamountsent += mtx.vout[i+1].nValue;
                 } 
                 if ( totalamountsent < amount ) newamount = totalamountsent;
-                //int64_t temptst = mpz_get_si2(mpzTotalAllocations);
+                //int64_t temptst = au256TotalAllocations.GetLow64();
                 //fprintf(stderr, "checkamount RPC.%li totalallocations.%li\n",totalamountsent, temptst);
             }
             else

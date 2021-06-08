@@ -16,8 +16,6 @@
 #include "CCPegs.h"
 #include "../importcoin.h"
 #include "key_io.h"
-#include <gmp.h>
-
 
 /*
 pegs CC is able to create a coin backed (by any supported coin with gateways CC deposits) and pegged to any synthetic price that is able to be calculated based on prices CC
@@ -547,30 +545,20 @@ std::string PegsGetTokenName(uint256 tokenid)
 
 int64_t PegsGetTokensAmountPerPrice(int64_t amount,uint256 tokenid)
 {      
-    mpz_t res,a,b;
-    mpz_init(res);
-    mpz_init(a);
-    mpz_init(b);
-    mpz_set_si(a, amount);
-    mpz_set_si(b, COIN);
-    mpz_mul(res, a, b);
-    mpz_set_si(a, PegsGetTokenPrice(tokenid));   
-    mpz_tdiv_q(res, res, a);
-    return (mpz_get_si(res));           
+    arith_uint256 res(0),a(amount),b(COIN);
+    res = a * b;
+    a = PegsGetTokenPrice(tokenid);
+    res = res / a;
+    return res.GetLow64();
 }
 
 double PegsGetRatio(uint256 tokenid,std::pair<int64_t,int64_t> account)
 {      
-    mpz_t res,a,b;
-    mpz_init(res);
-    mpz_init(a);
-    mpz_init(b);
-    mpz_set_si(a, account.first);
-    mpz_set_si(b, PegsGetTokenPrice(tokenid));
-    mpz_mul(res, a, b);
-    mpz_set_si(a, COIN);
-    mpz_tdiv_q(res, res, a);
-    return ((double)account.second)*100/mpz_get_si(res);           
+    arith_uint256 res(0),a(account.first),b(PegsGetTokenPrice(tokenid));
+    res = a * b;
+    a = COIN;
+    res = res / a;
+    return ((double)account.second)*100/res.GetLow64();
 }
 
 double PegsGetAccountRatio(uint256 pegstxid,uint256 tokenid,uint256 accounttxid)
@@ -627,28 +615,24 @@ double PegsGetGlobalRatio(uint256 pegstxid)
             globalaccounts[tokenid].first+=nValue;
         }
     }
-    mpz_t res,globaldeposit,a,b;
-    mpz_init(res);
-    mpz_init(globaldeposit);
-    mpz_init(a);
-    mpz_init(b);
-    mpz_set_si(globaldeposit, 0);
+    arith_uint256 res(0),globaldeposit(0),a(0),b(0);
+
     for (std::map<uint256,std::pair<int64_t,int64_t>>::iterator it = globalaccounts.begin(); it != globalaccounts.end(); ++it)
     {
-        mpz_set_si(res, 0);
-        mpz_set_si(a, globalaccounts[it->first].first);
-        mpz_set_si(b, PegsGetTokenPrice(it->first));
-        mpz_mul(res,a,b);
-        mpz_add(globaldeposit,globaldeposit,res);
+        res = 0;
+        a = globalaccounts[it->first].first;
+        b = PegsGetTokenPrice(it->first);
+        res = a * b;
+        globaldeposit = globaldeposit + res;
         globaldebt+=globalaccounts[it->first].second;
     }
     if (globaldebt>0)
     {       
-        mpz_set_si(res, 0);
-        mpz_set_si(a, COIN);
-        mpz_tdiv_q(res, globaldeposit, a);
-        printf("%lu %lu\n",globaldebt,mpz_get_si(res));
-        return ((double)globaldebt)*100/mpz_get_si(res); 
+        res = 0;
+        a = COIN;
+        res = globaldeposit / a;
+        printf("%lu %lu\n",globaldebt,res.GetLow64());
+        return ((double)globaldebt)*100/res.GetLow64();
     }
     return (0);
 }

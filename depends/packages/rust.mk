@@ -3,11 +3,11 @@ $(package)_version=1.52.1
 $(package)_download_path=https://static.rust-lang.org/dist
 
 $(package)_file_name_linux=rust-$($(package)_version)-x86_64-unknown-linux-gnu.tar.gz
-$(package)_sha256_hash_linux=e024698320d76b74daf0e6e71be3681a1e7923122e3ebd03673fcac3ecc23810
+$(package)_sha256_hash_linux=617ae06e212cb65bc4abbf52b158b0328b9f1a6c2f822c27c95b274d6fbc0627
 $(package)_file_name_darwin=rust-$($(package)_version)-x86_64-apple-darwin.tar.gz
-$(package)_sha256_hash_darwin=f0dfba507192f9b5c330b5984ba71d57d434475f3d62bd44a39201e36fa76304
+$(package)_sha256_hash_darwin=cfa73228ea54e2c94f75d1b142ea41444c463f4ee8562a3eca1b11b2fe8af95a
 $(package)_file_name_mingw32=rust-$($(package)_version)-x86_64-pc-windows-gnu.tar.gz
-$(package)_sha256_hash_mingw32=358e1435347c67dbf33aa9cad6fe501a833d6633ed5d5aa1863d5dffa0349be9
+$(package)_sha256_hash_mingw32=b9c9ad778cb329015c0033ebe2e250c6979aa6509ece8dbc39e4d7988e19f8a2
 
 # https://github.com/bazelbuild/rules_rust/blob/main/rust/known_shas.bzl
 $(package)_file_name_arm_darwin=rust-$($(package)_version)-aarch64-apple-darwin.tar.gz

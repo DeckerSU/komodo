@@ -4744,7 +4744,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!fromTaddr || !zaddrRecipients.empty()) {
         // We have shielded inputs or outputs, and therefore cannot create
         // transactions before Sapling activates.
-        if (!Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
+        if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
             throw JSONRPCError(
                 RPC_INVALID_PARAMETER, "Cannot create shielded transactions before Sapling has activated");
         }
@@ -4864,7 +4864,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     int nextBlockHeight = chainActive.Height() + 1;
-    const bool saplingActive =  Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING);
+    const bool saplingActive =  NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
 
     // We cannot create shielded transactions before Sapling activates.
     if (!saplingActive) {
@@ -4872,7 +4872,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
             RPC_INVALID_PARAMETER, "Cannot create shielded transactions before Sapling has activated");
             }
 
-    bool overwinterActive = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER);
+    bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     assert(overwinterActive);
     unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;
 

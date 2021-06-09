@@ -532,6 +532,7 @@ endif
 
 komodod_LDADD = \
   $(LIBBITCOIN_SERVER) \
+  $(CURL_LIBS) \
   $(LIBBITCOIN_COMMON) \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_UTIL) \

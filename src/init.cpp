@@ -47,6 +47,7 @@
 #include "rpc/register.h"
 #include "script/standard.h"
 #include "scheduler.h"
+#include "stratum.h"
 #include "txdb.h"
 #include "torcontrol.h"
 #include "ui_interface.h"
@@ -83,6 +84,8 @@
 #if ENABLE_ZMQ
 #include "zmq/zmqnotificationinterface.h"
 #endif
+
+static const bool DEFAULT_STRATUM_ENABLE = false;
 
 #if ENABLE_PROTON
 #include "amqp/amqpnotificationinterface.h"
@@ -568,6 +571,11 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-rpcworkqueue=<n>", strprintf("Set the depth of the work queue to service RPC calls (default: %d)", DEFAULT_HTTP_WORKQUEUE));
         strUsage += HelpMessageOpt("-rpcservertimeout=<n>", strprintf("Timeout during HTTP requests (default: %d)", DEFAULT_HTTP_SERVER_TIMEOUT));
     }
+    strUsage += HelpMessageGroup(_("Stratum server options:"));
+    strUsage += HelpMessageOpt("-stratum", _("Enable stratum server (default: off)"));
+    strUsage += HelpMessageOpt("-stratumbind=<addr>", _("Bind to given address to listen for Stratum work requests. Use [host]:port notation for IPv6. This option can be specified multiple times (default: bind to all interfaces)"));
+    strUsage += HelpMessageOpt("-stratumport=<port>", strprintf(_("Listen for Stratum work requests on <port> (default: %u or testnet: %u)"), BaseParams().StratumPort(), BaseParams().StratumPort()));
+    strUsage += HelpMessageOpt("-stratumallowip=<ip>", _("Allow Stratum work requests from specified source. Valid for <ip> are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24). This option can be specified multiple times"));
 
     // Disabled until we can lock notes and also tune performance of libsnark which by default uses multiple threads
     //strUsage += HelpMessageOpt("-rpcasyncthreads=<n>", strprintf(_("Set the number of threads to service Async RPC calls (default: %d)"), 1));
@@ -908,6 +916,8 @@ bool AppInitServers(boost::thread_group& threadGroup)
     RPCServer::OnStopped(&OnRPCStopped);
     RPCServer::OnPreCommand(&OnRPCPreCommand);
     if (!InitHTTPServer())
+        return false;
+    if (GetBoolArg("-stratum", DEFAULT_STRATUM_ENABLE) && !InitStratumServer())
         return false;
     if (!StartRPC())
         return false;

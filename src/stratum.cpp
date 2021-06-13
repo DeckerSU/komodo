@@ -55,10 +55,20 @@
 #include <boost/foreach.hpp>
 #include "ui_interface.h"
 
-/* httpserver.cpp absent routines */
+extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
+
+/**
+ * Begin of helper routines,
+ * included: missed in httpserver.cpp in our codebase, missed
+ * constructors for CSubNet(...), etc.
+*/
+
+namespace { // better to use anonymous namespace for helper routines
+
+// TODO: fix places which using CSubNet(...) constructors with numeric (/8, /16, /24, etc.) mask
 
 /** Check if a network address is allowed to access the Stratum server */
-static bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNetAddr& netaddr)
+bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNetAddr& netaddr)
 {
     if (!netaddr.IsValid())
         return false;
@@ -68,12 +78,12 @@ static bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNe
     return false;
 }
 
-inline static bool IsArgSet(const std::string& strArg)
+inline bool IsArgSet(const std::string& strArg)
 {
     return mapArgs.count(strArg);
 }
 
-inline static std::vector<std::string> GetArgs(const std::string& strArg)
+inline std::vector<std::string> GetArgs(const std::string& strArg)
 {
     if (IsArgSet(strArg))
         return mapMultiArgs.at(strArg);
@@ -109,7 +119,7 @@ bool InitEndpointList(const std::string& which, int defaultPort, std::vector<std
     return !endpoints.empty();
 }
 
-static bool LookupHost(const char *pszName, CNetAddr& addr, bool fAllowLookup)
+bool LookupHost(const char *pszName, CNetAddr& addr, bool fAllowLookup)
 {
     std::vector<CNetAddr> vIP;
     LookupHost(pszName, vIP, 1, fAllowLookup);
@@ -119,7 +129,7 @@ static bool LookupHost(const char *pszName, CNetAddr& addr, bool fAllowLookup)
     return true;
 }
 
-static bool LookupSubNet(const char* pszName, CSubNet& ret)
+bool LookupSubNet(const char* pszName, CSubNet& ret)
 {
     std::string strSubnet(pszName);
     size_t slash = strSubnet.find_last_of('/');
@@ -158,7 +168,7 @@ static bool LookupSubNet(const char* pszName, CSubNet& ret)
 }
 
 /** Initialize ACL list for HTTP server */
-static bool InitSubnetAllowList(const std::string which, std::vector<CSubNet>& allowed_subnets)
+bool InitSubnetAllowList(const std::string which, std::vector<CSubNet>& allowed_subnets)
 {
     allowed_subnets.clear();
     CNetAddr localv4;
@@ -183,6 +193,12 @@ static bool InitSubnetAllowList(const std::string which, std::vector<CSubNet>& a
     }
     return true;
 }
+
+}
+
+/**
+ * End of helper routines
+*/
 
 struct StratumClient
 {
@@ -1532,7 +1548,8 @@ static void stratum_accept_conn_cb(evconnlistener *listener, evutil_socket_t fd,
 /** Setup the stratum connection listening services */
 static bool StratumBindAddresses(event_base* base)
 {
-    int defaultPort = GetArg("-stratumport", BaseParams().StratumPort());
+    int stratumPort = ASSETCHAINS_SYMBOL[0] == 0 ? BaseParams().StratumPort() : ASSETCHAINS_RPCPORT + 1000;
+    int defaultPort = GetArg("-stratumport", stratumPort);
     std::vector<std::pair<std::string, uint16_t> > endpoints;
 
     // Determine what addresses to bind to

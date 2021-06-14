@@ -416,11 +416,13 @@ struct StratumWork {
     std::vector<uint256> m_cb_branch;
     bool m_is_witness_enabled;
 
+    int32_t nHeight;
+
     // The cached 2nd-stage auxiliary hash value, if an auxiliary proof-of-work
     // solution has been found.
     boost::optional<uint256> m_aux_hash2;
 
-    StratumWork() : m_is_witness_enabled(false) { };
+    StratumWork() : m_is_witness_enabled(false),nHeight(0) { };
     StratumWork(const CBlockTemplate& block_template, bool is_witness_enabled);
 
     CBlock& GetBlock()
@@ -431,7 +433,7 @@ struct StratumWork {
 
 StratumWork::StratumWork(const CBlockTemplate& block_template, bool is_witness_enabled)
     : m_block_template(block_template)
-    , m_is_witness_enabled(is_witness_enabled)
+    , m_is_witness_enabled(is_witness_enabled), nHeight(0)
 {
     // Generate the block-witholding secret for the work unit.
     // if (!m_block_template.block.m_aux_pow.IsNull()) {
@@ -446,6 +448,7 @@ StratumWork::StratumWork(const CBlockTemplate& block_template, bool is_witness_e
     for (const auto& tx : m_block_template.block.vtx) {
         leaves.push_back(tx.GetHash());
     }
+
     // m_cb_branch = ComputeMerkleBranch(leaves, 0);
     // If segwit is not active, we're done.  Otherwise...
     // if (m_is_witness_enabled) {
@@ -769,12 +772,12 @@ std::string GetWorkUnit(StratumClient& client)
         std::unique_ptr<CBlockTemplate> new_work(CreateNewBlock(CPubKey(), scriptDummy, KOMODO_MAXGPUCOUNT, false)); // std::unique_ptr<CBlockTemplate> new_work = BlockAssembler(Params()).CreateNewBlock(script);
 
         /* test values for debug */
-        new_work->block.nBits = 0x200f0f0f;
-        new_work->block.nTime = 1623567886;
-        new_work->block.hashPrevBlock = uint256S("027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71");
-        new_work->block.hashMerkleRoot = uint256S("29f0e769c762b691d81d31bbb603719a94ef04d53d332f7de5e5533ddfd08e19");
-        new_work->block.hashFinalSaplingRoot = uint256S("3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb");
-        DecodeHexTx(new_work->block.vtx[0], "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff03510101ffffffff01aa2ce73b0000000023210325b4ca6736f90679f712be1454c5302050aae6edb51b0d2a051156bc868fec16ac4aabc560");
+        // new_work->block.nBits = 0x200f0f0f;
+        // new_work->block.nTime = 1623567886;
+        // new_work->block.hashPrevBlock = uint256S("027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71");
+        // new_work->block.hashMerkleRoot = uint256S("29f0e769c762b691d81d31bbb603719a94ef04d53d332f7de5e5533ddfd08e19");
+        // new_work->block.hashFinalSaplingRoot = uint256S("3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb");
+        // DecodeHexTx(new_work->block.vtx[0], "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff03510101ffffffff01aa2ce73b0000000023210325b4ca6736f90679f712be1454c5302050aae6edb51b0d2a051156bc868fec16ac4aabc560");
 
 
         if (!new_work) {
@@ -911,6 +914,7 @@ std::string GetWorkUnit(StratumClient& client)
 
         current_work.GetBlock().vtx[0] = cb;
         current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
+        current_work.nHeight = tip->GetHeight() + 1;
 
     }
 
@@ -930,6 +934,9 @@ std::string GetWorkUnit(StratumClient& client)
 
     // copy entire blockheader created with CreateNewBlock to blkhdr
     blkhdr = current_work.GetBlock().GetBlockHeader();
+    // blkhdr.hashPrevBlock = current_work.GetBlock().hashPrevBlock;
+    // blkhdr.hashMerkleRoot = current_work.GetBlock().hashMerkleRoot;
+
 
     // CDataStream ds(SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
     CDataStream ds(SER_GETHASH, PROTOCOL_VERSION);
@@ -944,6 +951,7 @@ std::string GetWorkUnit(StratumClient& client)
         CBlockIndex index {blkhdr};
         index.SetHeight(tip->GetHeight() + 1);
 
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
         std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
         std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock() = " << blockToJSON(current_work.GetBlock(), &index).write() << std::endl;
 
@@ -1041,6 +1049,20 @@ std::string GetWorkUnit(StratumClient& client)
          + mining_notify.write()  + "\n";
 }
 
+/**
+ * @brief
+ *
+ * @param client
+ * @param job_id
+ * @param current_work
+ * @param extranonce1
+ * @param extranonce2
+ * @param nVersion
+ * @param nTime
+ * @param sol
+ * @return true
+ * @return false
+ */
 bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork& current_work, const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2, boost::optional<uint32_t> nVersion, uint32_t nTime, const std::vector<unsigned char>& sol)
 {
 
@@ -1133,41 +1155,76 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
     {
         // Check native proof-of-work
         uint32_t version = current_work.GetBlock().nVersion;
-        if (nVersion && client.m_version_rolling_mask) {
-            version = (version & ~client.m_version_rolling_mask)
-                    | (*nVersion & client.m_version_rolling_mask);
-        } else if (nVersion) {
+
+        // if (nVersion && client.m_version_rolling_mask) {
+        //     version = (version & ~client.m_version_rolling_mask)
+        //             | (*nVersion & client.m_version_rolling_mask);
+        // } else
+        if (nVersion) {
             version = *nVersion;
         }
 
-        // if (!current_work.GetBlock().m_aux_pow.IsNull() && nTime != current_work.GetBlock().nTime) {
-        //     LogPrintf("Error: miner %s returned altered nTime value for native proof-of-work; nTime-rolling is not supported\n", client.m_addr.ToString());
-        //     throw JSONRPCError(RPC_INVALID_PARAMETER, "nTime-rolling is not supported");
-        // }
+        if (fstdErrDebugOutput) {
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nTime = " << nTime << strprintf(" (%08x)", nTime) << std::endl;
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
+
+        }
+
+        if (/*!current_work.GetBlock().m_aux_pow.IsNull() &&*/ nTime != current_work.GetBlock().nTime) {
+            LogPrintf("Error: miner %s returned altered nTime value for native proof-of-work; nTime-rolling is not supported\n", client.m_addr.ToString());
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "nTime-rolling is not supported");
+        }
 
         // CBlockHeader blkhdr;
         CBlock blkhdr;
         blkhdr.nVersion = version;
         blkhdr.hashPrevBlock = current_work.GetBlock().hashPrevBlock;
         // blkhdr.hashMerkleRoot = ComputeMerkleRootFromBranch(cb.GetHash(), cb_branch, 0);
-        blkhdr.hashMerkleRoot = blkhdr.BuildMerkleTree();
+        // blkhdr.hashMerkleRoot = blkhdr.BuildMerkleTree();
         blkhdr.nTime = nTime;
         blkhdr.nBits = current_work.GetBlock().nBits;
-        // blkhdr.nNonce = nNonce;
-        // nNonce <<= 32; nNonce >>= 16; // clear the top and bottom 16 bits (for local use as thread flags and counters)
-        //uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
 
         // (!) should combime extranonce1 and extranonce2
-        arith_uint256 nonce(0);
-        blkhdr.nNonce = ArithToUint256(nonce);
+
+        std::vector<unsigned char> noncerev(extranonce1);
+        std::reverse(noncerev.begin(), noncerev.end());
+        noncerev.insert(noncerev.begin(), extranonce2.rbegin(), extranonce2.rend());
+
+        std::vector<unsigned char> nonce(extranonce1);
+        nonce.insert(nonce.end(), extranonce2.begin(), extranonce2.end());
+
+        // nonce = extranonce1 + extranonce2
+        if (fstdErrDebugOutput) {
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
+        }
+
+        // ["WORKER_NAME", "JOB_ID", "TIME", "NONCE_2", "EQUIHASH_SOLUTION"] <- this comes from client (miner)
+        // CustomizeWork: stratum.cpp,639 nonce = c2d9dd830000000000000000eacb000002000000000000000000000000000000
+        // SubmitBlock: stratum.cpp,1183 blkhdr = c2d9dd830000000000000000eacb000002000000000000000000000000000000
+
+        blkhdr.nSolution = std::vector<unsigned char>(sol.begin() + 3, sol.end());
+        blkhdr.hashFinalSaplingRoot = current_work.GetBlock().hashFinalSaplingRoot;
+        blkhdr.hashMerkleRoot = current_work.GetBlock().hashMerkleRoot;
+        blkhdr.nNonce = nonce;
 
         //const CChainParams& chainparams = Params();
+        // 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c - 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c
+        // 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c - 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c
+        // 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb - 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb
+
+        if (fstdErrDebugOutput) {
+            CBlockIndex index {blkhdr};
+            index.SetHeight(current_work.nHeight);
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
+        }
 
         {
             LOCK(cs_main);
             uint8_t pubkey33[33];
-            int32_t height = 0; // TODO: should set real height here
+            int32_t height = current_work.nHeight;
             res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
+            if (fstdErrDebugOutput) std::cerr << "CheckProofOfWork = " << res << std::endl;
         }
 
         uint256 hash = blkhdr.GetHash();
@@ -1183,15 +1240,19 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nVersion = version;
             // block.hashMerkleRoot = BlockMerkleRoot(block);
             block.hashMerkleRoot = block.BuildMerkleTree();
+            if (fstdErrDebugOutput) std::cerr << "hashMerkleRoot = " << block.hashMerkleRoot.GetHex() << std::endl;
+
             block.nTime = nTime;
             // block.nNonce = nNonce;
             // nNonce <<= 32; nNonce >>= 16; // clear the top and bottom 16 bits (for local use as thread flags and counters)
-            block.nNonce = ArithToUint256(nonce);
+            block.nNonce = uint256(nonce);
+
 
             std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
             // res = ProcessNewBlock(Params(), pblock, true, NULL);
             CValidationState state;
             res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
+            // res = ProcessNewBlock(1,current_work.nHeight,state, NULL, &block, true /* forceProcessing */ , NULL);
 
             if (res) {
                 LOCK(cs_main);
@@ -1531,7 +1592,7 @@ UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
 
     StratumWork &current_work = work_templates[job_id];
 
-    uint32_t nTime = ParseHexInt4(params[2], "nTime");
+    uint32_t nTime = bswap_32(ParseHexInt4(params[2], "nTime"));
 
     std::vector<unsigned char> extranonce2 = ParseHexV(params[3], "extranonce2");
     if (extranonce2.size() != 32 - 4) {

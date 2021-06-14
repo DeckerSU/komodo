@@ -966,7 +966,9 @@ std::string GetWorkUnit(StratumClient& client)
     params.push_back(HexInt4(blkhdr.nTime)); // TIME
     params.push_back(HexInt4(blkhdr.nBits)); // BITS
     // Clean Jobs. If true, miners should abort their current work and immediately use the new job. If false, they can still use the current job, but should move to the new one after exhausting the current nonce range.
-    params.push_back(true); // CLEAN_JOBS
+    UniValue clean_jobs(UniValue::VBOOL);
+    clean_jobs = true;
+    params.push_back(clean_jobs); // CLEAN_JOBS
 
 
     // // For reasons of who-the-heck-knows-why, stratum byte-swaps each

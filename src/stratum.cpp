@@ -57,7 +57,9 @@
 #include <memory> // make_unique
 
 extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
-extern UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // from rpc/blockchain.cpp
+UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // rpc/blockchain.cpp
+bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_read.cpp
+
 static const bool fstdErrDebugOutput = true;
 
 /**
@@ -759,6 +761,15 @@ std::string GetWorkUnit(StratumClient& client)
         const CScript scriptDummy = CScript() << OP_FALSE;
         std::unique_ptr<CBlockTemplate> new_work(CreateNewBlock(CPubKey(), scriptDummy, KOMODO_MAXGPUCOUNT, false)); // std::unique_ptr<CBlockTemplate> new_work = BlockAssembler(Params()).CreateNewBlock(script);
 
+        /* test values for debug */
+        new_work->block.nBits = 0x200f0f0f;
+        new_work->block.nTime = 1623567886;
+        new_work->block.hashPrevBlock = uint256S("027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71");
+        new_work->block.hashMerkleRoot = uint256S("29f0e769c762b691d81d31bbb603719a94ef04d53d332f7de5e5533ddfd08e19");
+        new_work->block.hashFinalSaplingRoot = uint256S("3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb");
+        DecodeHexTx(new_work->block.vtx[0], "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff03510101ffffffff01aa2ce73b0000000023210325b4ca6736f90679f712be1454c5302050aae6edb51b0d2a051156bc868fec16ac4aabc560");
+
+
         if (!new_work) {
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
         }
@@ -954,17 +965,25 @@ std::string GetWorkUnit(StratumClient& client)
             WriteLE64(&vnVersion[0], blkhdr.nVersion);
             params.push_back(HexStr(vnVersion));
         (3) params.push_back(HexInt4(bswap_32(blkhdr.nVersion)));
+
+            Bytes order, cheatsheet:
+
+            [ need ] fbc2f4300c01f0b7820d00e3347c8da4ee614674376cbc45359daa54f9b5493e - HexStr(ToByteVector(blkhdr.hashFinalSaplingRoot))
+            [ need ] fbc2f4300c01f0b7820d00e3347c8da4ee614674376cbc45359daa54f9b5493e - HexStr(blkhdr.hashFinalSaplingRoot)
+            [ ---- ] 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb - blkhdr.hashFinalSaplingRoot.GetHex()
+            [ ---- ] 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb - blkhdr.hashFinalSaplingRoot.ToString()
     */
 
-    params.push_back(HexInt4(bswap_32(blkhdr.nVersion))); // VERSION
-    params.push_back(blkhdr.hashPrevBlock.GetHex());  // PREVHASH
-    params.push_back(blkhdr.hashMerkleRoot.GetHex()); // MERKLEROOT
-    params.push_back(blkhdr.hashFinalSaplingRoot.GetHex()); // RESERVED -> hashFinalSaplingRoot
+
+    params.push_back(HexInt4(bswap_32(blkhdr.nVersion))); // VERSION (0x4 -> "04000000")
+    params.push_back(HexStr(blkhdr.hashPrevBlock));  // PREVHASH
+    params.push_back(HexStr(blkhdr.hashMerkleRoot)); // MERKLEROOT
+    params.push_back(HexStr(blkhdr.hashFinalSaplingRoot)); // RESERVED -> hashFinalSaplingRoot
 
     // UpdateTime(&blkhdr, Params().GetConsensus(), tip);
 
-    params.push_back(HexInt4(blkhdr.nTime)); // TIME
-    params.push_back(HexInt4(blkhdr.nBits)); // BITS
+    params.push_back(HexInt4(bswap_32(blkhdr.nTime))); // TIME
+    params.push_back(HexInt4(bswap_32(blkhdr.nBits))); // BITS
     // Clean Jobs. If true, miners should abort their current work and immediately use the new job. If false, they can still use the current job, but should move to the new one after exhausting the current nonce range.
     UniValue clean_jobs(UniValue::VBOOL);
     clean_jobs = true;

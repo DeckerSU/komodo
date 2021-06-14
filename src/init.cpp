@@ -206,6 +206,7 @@ static boost::scoped_ptr<ECCVerifyHandle> globalVerifyHandle;
 
 void Interrupt(boost::thread_group& threadGroup)
 {
+    InterruptStratumServer();
     InterruptHTTPServer();
     InterruptHTTPRPC();
     InterruptRPC();
@@ -235,6 +236,7 @@ void Shutdown()
     StopHTTPRPC();
     StopREST();
     StopRPC();
+    StopStratumServer();
     StopHTTPServer();
 #ifdef ENABLE_WALLET
     if (pwalletMain)

@@ -1827,6 +1827,12 @@ UniValue stratum_mining_extranonce_subscribe(StratumClient& client, const UniVal
     return true;
 }
 
+/** Callback to write from a stratum connection. */
+static void stratum_write_cb(bufferevent *bev, void *ctx)
+{
+    /* template */
+}
+
 /** Callback to read from a stratum connection. */
 static void stratum_read_cb(bufferevent *bev, void *ctx)
 {
@@ -1840,7 +1846,10 @@ static void stratum_read_cb(bufferevent *bev, void *ctx)
     StratumClient& client = subscriptions[bev];
     // Get links to the input and output buffers
     evbuffer *input = bufferevent_get_input(bev);
+    assert(input);
     evbuffer *output = bufferevent_get_output(bev);
+    assert(output);
+
     // Process each line of input that we have received
     char *cstr = 0;
     size_t len = 0;
@@ -1888,6 +1897,7 @@ static void stratum_read_cb(bufferevent *bev, void *ctx)
         }
 
         LogPrint("stratum", "Sending stratum response to %s : %s", client.GetPeer().ToString(), reply);
+        assert(output);
         if (evbuffer_add(output, reply.data(), reply.size())) {
             LogPrint("stratum", "Sending stratum response failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
         }
@@ -1905,6 +1915,7 @@ static void stratum_read_cb(bufferevent *bev, void *ctx)
         }
 
         LogPrint("stratum", "Sending requested stratum work unit to %s : %s", client.GetPeer().ToString(), data);
+        assert(output);
         if (evbuffer_add(output, data.data(), data.size())) {
             LogPrint("stratum", "Sending stratum work unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
         }
@@ -2053,7 +2064,13 @@ void BlockWatcher()
         // send updated work to miners.
         for (auto& subscription : subscriptions) {
             bufferevent* bev = subscription.first;
+
+            if (!bev)
+                continue;
             evbuffer *output = bufferevent_get_output(bev);
+            if (!output)
+                continue;
+
             StratumClient& client = subscription.second;
             // Ignore clients that aren't authorized yet.
             if (!client.m_authorized && client.m_aux_addr.empty()) {
@@ -2082,6 +2099,8 @@ void BlockWatcher()
             }
             // Send the new work to the client
             LogPrint("stratum", "Sending updated stratum work unit to %s : %s", client.GetPeer().ToString(), data);
+
+            assert(output);
             if (evbuffer_add(output, data.data(), data.size())) {
                 LogPrint("stratum", "Sending stratum work unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
             }

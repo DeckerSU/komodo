@@ -56,6 +56,9 @@
 #include "ui_interface.h"
 #include <memory> // make_unique
 
+#include <locale>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
 extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // rpc/blockchain.cpp
 bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_read.cpp
@@ -222,6 +225,22 @@ namespace { // better to use anonymous namespace for helper routines
 
         return dDiff;
     }
+
+    std::string DateTimeStrPrecise() // or we can use standart one, like DateTimeStrFormat("[%Y-%m-%d %H:%M:%S.%f]", GetTime())
+    {
+        // https://stackoverflow.com/questions/28136660/format-a-posix-time-with-just-3-digits-in-fractional-seconds
+        // https://www.boost.org/doc/libs/1_35_0/doc/html/date_time/date_time_io.html#date_time.format_flags
+
+        // std::locale takes ownership of the pointer
+        boost::posix_time::ptime const date_time = boost::posix_time::microsec_clock::local_time();
+        std::locale loc(std::locale::classic(), new boost::posix_time::time_facet("[%Y-%m-%d %H:%M:%S.%f] "));
+        std::stringstream ss;
+        ss.imbue(loc);
+        // ss << boost::posix_time::from_time_t(nTime);
+        ss << date_time;
+        return ss.str();
+    }
+
 
 }
 
@@ -638,9 +657,9 @@ void CustomizeWork(const StratumClient& client, const StratumWork& current_work,
                               extranonce2.end());
 
     // nonce = extranonce1 + extranonce2
-    if (fstdErrDebugOutput) {
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
-    }
+    // if (fstdErrDebugOutput) {
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
+    // }
 
     if (cb.vin.empty()) {
         const std::string msg = strprintf("%s: first transaction is missing coinbase input; unable to customize work to miner", __func__);
@@ -784,7 +803,7 @@ std::string GetWorkUnit(StratumClient& client)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
         }
 
-        if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
+        //if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
 
         // So that block.GetHash() is correct
         //new_work->block.hashMerkleRoot = BlockMerkleRoot(new_work->block);
@@ -792,7 +811,7 @@ std::string GetWorkUnit(StratumClient& client)
         // NB! here we have merkle with dummy script in coinbase, after CustomizeWork
         // we should recalculate it (!)
 
-        if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
+        //if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
 
         job_id = new_work->block.GetHash();
         //work_templates[job_id] = StratumWork(*new_work, new_work->block.vtx[0]->HasWitness());
@@ -882,7 +901,7 @@ std::string GetWorkUnit(StratumClient& client)
             // GetDifficultyFromBits(0x200f0f0f) == 1
             // %g - Use the shortest representation: %e or %f (c) http://www.cplusplus.com/reference/cstdio/printf/
 
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ <<
+            std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ <<
                     strprintf(" target = %s, komodo_diff = %g, ccminer_diff = %g",
                     strTarget, GetDifficultyFromBits(hashTarget.GetCompact(false)), ccminer::equi_stratum_target_to_diff(strTarget)) << std::endl;
         }
@@ -898,11 +917,11 @@ std::string GetWorkUnit(StratumClient& client)
     CMutableTransaction cb, bf;
     std::vector<uint256> cb_branch;
 
-    if (fstdErrDebugOutput)
-    {
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] cb = " << CTransaction(cb).ToString() << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
-    }
+    // if (fstdErrDebugOutput)
+    // {
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] cb = " << CTransaction(cb).ToString() << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
+    // }
 
     {
         // TODO: make ExtraNonce1 return 4 bytes values, instead of 8
@@ -918,11 +937,11 @@ std::string GetWorkUnit(StratumClient& client)
 
     }
 
-    if (fstdErrDebugOutput)
-    {
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] cb = " << CTransaction(cb).ToString() << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
-    }
+    // if (fstdErrDebugOutput)
+    // {
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] cb = " << CTransaction(cb).ToString() << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
+    // }
 
     CBlockHeader blkhdr;
     // Setup native proof-of-work
@@ -942,20 +961,21 @@ std::string GetWorkUnit(StratumClient& client)
     CDataStream ds(SER_GETHASH, PROTOCOL_VERSION);
     ds << cb;
 
-    if (fstdErrDebugOutput)
-    {
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " set_target = "<< set_target.write() << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " ds = " << HexStr(ds, false) << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " cb.GetHash().ToString() = " << cb.GetHash().ToString() << std::endl;
+    // if (fstdErrDebugOutput)
+    // {
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " set_target = "<< set_target.write() << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " ds = " << HexStr(ds, false) << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " cb.GetHash().ToString() = " << cb.GetHash().ToString() << std::endl;
 
-        CBlockIndex index {blkhdr};
-        index.SetHeight(tip->GetHeight() + 1);
+    //     CBlockIndex index {blkhdr};
+    //     index.SetHeight(tip->GetHeight() + 1);
 
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock() = " << blockToJSON(current_work.GetBlock(), &index).write() << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock() = " << blockToJSON(current_work.GetBlock(), &index).write() << std::endl;
 
-    }
+    // }
+
     // ds << MakeTransactionRef(std::move(cb));
     // if (ds.size() < (4 + 1 + 32 + 4 + 1)) {
     //     throw std::runtime_error("Serialized transaction is too small to be parsed.  Is this even a coinbase?");
@@ -1066,11 +1086,11 @@ std::string GetWorkUnit(StratumClient& client)
 bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork& current_work, const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2, boost::optional<uint32_t> nVersion, uint32_t nTime, const std::vector<unsigned char>& sol)
 {
 
-    if (fstdErrDebugOutput && extranonce1.size() > 3) {
-        std::string sExtraNonce1 = HexStr(extranonce1);
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, extranonce1[0], extranonce1[1], extranonce1[2], extranonce1[3], sExtraNonce1) << std::endl;
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " extranonce1.size() = "  << extranonce1.size() << std::endl;
-    }
+    // if (fstdErrDebugOutput && extranonce1.size() > 3) {
+    //     std::string sExtraNonce1 = HexStr(extranonce1);
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, extranonce1[0], extranonce1[1], extranonce1[2], extranonce1[3], sExtraNonce1) << std::endl;
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " extranonce1.size() = "  << extranonce1.size() << std::endl;
+    // }
 
     if (extranonce1.size() != 4) {
         std::string msg = strprintf("extranonce1 is wrong length (received %d bytes; expected %d bytes", extranonce1.size(), 4);
@@ -1164,11 +1184,10 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             version = *nVersion;
         }
 
-        if (fstdErrDebugOutput) {
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nTime = " << nTime << strprintf(" (%08x)", nTime) << std::endl;
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
-
-        }
+        // if (fstdErrDebugOutput) {
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nTime = " << nTime << strprintf(" (%08x)", nTime) << std::endl;
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
+        // }
 
         if (/*!current_work.GetBlock().m_aux_pow.IsNull() &&*/ nTime != current_work.GetBlock().nTime) {
             LogPrintf("Error: miner %s returned altered nTime value for native proof-of-work; nTime-rolling is not supported\n", client.m_addr.ToString());
@@ -1194,9 +1213,9 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         nonce.insert(nonce.end(), extranonce2.begin(), extranonce2.end());
 
         // nonce = extranonce1 + extranonce2
-        if (fstdErrDebugOutput) {
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
-        }
+        // if (fstdErrDebugOutput) {
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
+        // }
 
         // ["WORKER_NAME", "JOB_ID", "TIME", "NONCE_2", "EQUIHASH_SOLUTION"] <- this comes from client (miner)
         // CustomizeWork: stratum.cpp,639 nonce = c2d9dd830000000000000000eacb000002000000000000000000000000000000
@@ -1212,22 +1231,37 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         // 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c - 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c
         // 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb - 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb
 
-        if (fstdErrDebugOutput) {
-            CBlockIndex index {blkhdr};
-            index.SetHeight(current_work.nHeight);
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
-        }
+        // if (fstdErrDebugOutput) {
+        //     CBlockIndex index {blkhdr};
+        //     index.SetHeight(current_work.nHeight);
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
+        // }
 
         {
-            LOCK(cs_main);
+            // LOCK(cs_main);
             uint8_t pubkey33[33];
             int32_t height = current_work.nHeight;
             res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
-            if (fstdErrDebugOutput) std::cerr << "CheckProofOfWork = " << res << std::endl;
+            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "CheckProofOfWork = " << res << std::endl;
         }
 
         uint256 hash = blkhdr.GetHash();
+
+        if (fstdErrDebugOutput)
+        {
+            // bits = GetNextWorkRequired(blockindex, nullptr, Params().GetConsensus());
+            // bits = blkhdr.nBits;
+            uint256 hashTarget = ArithToUint256(arith_uint256().SetCompact(blkhdr.nBits));
+            std::string strTarget = hashTarget.ToString();
+
+            std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ <<
+                     strprintf(" [%d] hash = %s, komodo_diff = %g, ccminer_diff = %g", current_work.GetBlock().vtx.size(),
+                     blkhdr.GetHash().ToString(),
+                     GetDifficultyFromBits(UintToArith256(blkhdr.GetHash()).GetCompact()),
+                     ccminer::equi_stratum_target_to_diff(blkhdr.GetHash().ToString())) << std::endl;
+        }
+
         if (res) {
 
             LogPrintf("GOT BLOCK!!! by %s: %s\n", client.m_addr.ToString(), hash.ToString());
@@ -1242,7 +1276,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nVersion = version;
             // block.hashMerkleRoot = BlockMerkleRoot(block);
             block.hashMerkleRoot = block.BuildMerkleTree();
-            if (fstdErrDebugOutput) std::cerr << "hashMerkleRoot = " << block.hashMerkleRoot.GetHex() << std::endl;
+            //if (fstdErrDebugOutput) std::cerr << "hashMerkleRoot = " << block.hashMerkleRoot.GetHex() << std::endl;
 
             block.nTime = nTime;
             // block.nNonce = nNonce;
@@ -1255,8 +1289,8 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
             // res = ProcessNewBlock(Params(), pblock, true, NULL);
             CValidationState state;
-            res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
-            // res = ProcessNewBlock(1,current_work.nHeight,state, NULL, &block, true /* forceProcessing */ , NULL);
+            // res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
+            res = ProcessNewBlock(1,current_work.nHeight,state, NULL, &block, true /* forceProcessing */ , NULL);
 
             if (res) {
                 LOCK(cs_main);
@@ -1381,13 +1415,13 @@ UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
      * sExtraNonce1 for a given client based on m_secret.
      */
 
-    if (fstdErrDebugOutput && vExtraNonce1.size() > 3) {
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, vExtraNonce1[0], vExtraNonce1[1], vExtraNonce1[2], vExtraNonce1[3], sExtraNonce1) << std::endl;
-        // recalc from client.m_secret example
-        uint256 sha256;
-        CSHA256().Write(client.m_secret.begin(), 32).Finalize(sha256.begin());
-        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << HexStr(std::vector<unsigned char>(sha256.begin(), sha256.begin() + 4)) << std::endl;
-    }
+    // if (fstdErrDebugOutput && vExtraNonce1.size() > 3) {
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, vExtraNonce1[0], vExtraNonce1[1], vExtraNonce1[2], vExtraNonce1[3], sExtraNonce1) << std::endl;
+    //     // recalc from client.m_secret example
+    //     uint256 sha256;
+    //     CSHA256().Write(client.m_secret.begin(), 32).Finalize(sha256.begin());
+    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << HexStr(std::vector<unsigned char>(sha256.begin(), sha256.begin() + 4)) << std::endl;
+    // }
 
     ret.push_back(NullUniValue);
     ret.push_back(sExtraNonce1);
@@ -1908,13 +1942,15 @@ static void stratum_accept_conn_cb(evconnlistener *listener, evutil_socket_t fd,
     from.SetSockAddr(address);
     // Early address-based allow check
 
-    if (!ClientAllowed(stratum_allow_subnets, from)) {
-        evconnlistener_free(listener);
-        LogPrint("stratum", "Rejected connection from disallowed subnet: %s\n", from.ToString());
-        return;
-    }
-    // Should be the same as EventBase(), but let's get it the
-    // official way.
+    // TODO: Enable restriction !
+    // if (!ClientAllowed(stratum_allow_subnets, from))
+    // {
+    //     evconnlistener_free(listener);
+    //     LogPrint("stratum", "Rejected connection from disallowed subnet: %s\n", from.ToString());
+    //     return;
+    // }
+
+    // Should be the same as EventBase(), but let's get it the official way.
     event_base *base = evconnlistener_get_base(listener);
     // Create a buffer for sending/receiving from this connection.
     bufferevent *bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
@@ -1973,8 +2009,10 @@ static bool StratumBindAddresses(event_base* base)
 
 /** Watches for new blocks and send updated work to miners. */
 static bool g_shutdown = false;
+
 void BlockWatcher()
 {
+    RenameThread("blkwatcher");
     boost::unique_lock<boost::mutex> lock(csBestBlock);
     boost::system_time checktxtime = boost::get_system_time();
     unsigned int txns_updated_last = 0;
@@ -1982,6 +2020,11 @@ void BlockWatcher()
         checktxtime += boost::posix_time::seconds(15);
         if (!cvBlockChange.timed_wait(lock, checktxtime)) {
             // Timeout: Check to see if mempool was updated.
+
+            // if (fstdErrDebugOutput) {
+            //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << DateTimeStrPrecise() << std::endl;
+            // }
+
             unsigned int txns_updated_next = mempool.GetTransactionsUpdated();
             if (txns_updated_last == txns_updated_next)
                 continue;

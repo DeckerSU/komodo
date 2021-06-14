@@ -1229,7 +1229,9 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
 
         uint256 hash = blkhdr.GetHash();
         if (res) {
+
             LogPrintf("GOT BLOCK!!! by %s: %s\n", client.m_addr.ToString(), hash.ToString());
+
             CBlock block(current_work.GetBlock());
             // block.vtx[0] = MakeTransactionRef(std::move(cb));
             block.vtx[0] = cb;
@@ -1245,7 +1247,9 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nTime = nTime;
             // block.nNonce = nNonce;
             // nNonce <<= 32; nNonce >>= 16; // clear the top and bottom 16 bits (for local use as thread flags and counters)
-            block.nNonce = uint256(nonce);
+
+            block.nNonce = nonce;
+            block.nSolution = std::vector<unsigned char>(sol.begin() + 3, sol.end());
 
 
             std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);

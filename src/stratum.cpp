@@ -724,7 +724,7 @@ uint256 CustomizeCommitHash(const StratumClient& client, const CBitcoinAddress& 
 
 std::string GetWorkUnit(StratumClient& client)
 {
-    LOCK(cs_main);
+    // LOCK(cs_main);
 
     /* if (!g_connman) {
         throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
@@ -888,9 +888,16 @@ std::string GetWorkUnit(StratumClient& client)
         hashTarget.SetHex("003fffc000000000000000000000000000000000000000000000000000000000"); // komodo_diff = 60.2362, ccminer_diff = 4
         hashTarget.SetHex("0007fff800000000000000000000000000000000000000000000000000000000"); // komodo_diff = 481.89, ccminer_diff = 31.9999
         hashTarget.SetHex("c7ff3800ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // komodo_diff = 0.0752956, ccminer_diff = 1.00303
-        hashTarget.SetHex("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"); // komodo_diff = 1, ccminer_diff = 16.9956 */
+        hashTarget.SetHex("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"); // komodo_diff = 1, ccminer_diff = 16.9956
 
         hashTarget.SetHex("00ffff0000000000000000000000000000000000000000000000000000000000"); // komodo_diff = 15.0591, ccminer_diff = 1
+
+
+        */
+
+        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000")); // 1.0
+        // aHashTarget = aHashTarget / 8704; // komodo_diff = 131074 (NiceHash), ccminer_diff = 8704 (Yiimp)
+        hashTarget = aHashTarget;
 
         strTarget = hashTarget.GetHex();
 
@@ -1293,7 +1300,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             res = ProcessNewBlock(1,current_work.nHeight,state, NULL, &block, true /* forceProcessing */ , NULL);
 
             if (res) {
-                LOCK(cs_main);
+                // LOCK(cs_main);
                 if (!mapBlockIndex.count(hash)) {
                     LogPrintf("Unable to find new block index entry; cannot prioritise block 0x%s\n", hash.ToString());
                 } else

@@ -1379,7 +1379,7 @@ void BoundParams(const std::string& method, const UniValue& params, size_t min, 
 UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
 {
     const std::string method("mining.subscribe");
-    BoundParams(method, params, 0, 2);
+    BoundParams(method, params, 0, 4);
 
     if (params.size() >= 1) {
         client.m_client = params[0].get_str();
@@ -1388,6 +1388,7 @@ UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
 
     // According to 'Stratum protocol changes for ZCash' - https://github.com/slushpool/poclbm-zcash/wiki/Stratum-protocol-changes-for-ZCash
     // mining.subscribe params looks like following:
+
     // {"id": 1, "method": "mining.subscribe", "params": ["CONNECT_HOST", CONNECT_PORT, "MINER_USER_AGENT", "SESSION_ID"]}
     // So, params[params.size()-1] should be SESSION_ID, but currently we don't support it.
 
@@ -1399,6 +1400,10 @@ UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
 
     // By protocol, Zcash's nonce is 32 bytes long. The miner will pick NONCE_2 such that len(NONCE_2) = 32 - len(NONCE_1).
     // Please note that Stratum use hex encoding, so you have to convert NONCE_1 from hex to binary before.
+
+    // ["CONNECT_HOST", CONNECT_PORT, "MINER_USER_AGENT", "SESSION_ID"]
+    // ["NiceHash/1.0.0", null, "stratum3.decker.host", 18776] // ua, session_id, host, port?
+    // ["ccminer/2.3.1"]
 
     UniValue ret(UniValue::VARR);
 

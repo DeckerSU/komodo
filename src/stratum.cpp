@@ -624,14 +624,21 @@ void CustomizeWork(const StratumClient& client, const StratumWork& current_work,
         LogPrint("stratum", "%s\n", msg);
         throw std::runtime_error(msg);
     }
+
     std::vector<unsigned char> nonce(extranonce1);
-    if ((nonce.size() + extranonce2.size()) != 12) {
-        const std::string msg = strprintf("%s: unexpected combined nonce length: extranonce1(%d) + extranonce2(%d) != 12; unable to submit work", __func__, nonce.size(), extranonce2.size());
+    if ((nonce.size() + extranonce2.size()) != 32) {
+        const std::string msg = strprintf("%s: unexpected combined nonce length: extranonce1(%d) + extranonce2(%d) != 32; unable to submit work", __func__, nonce.size(), extranonce2.size());
         LogPrint("stratum", "%s\n", msg);
         throw std::runtime_error(msg);
     }
     nonce.insert(nonce.end(), extranonce2.begin(),
                               extranonce2.end());
+
+    // nonce = extranonce1 + extranonce2
+    if (fstdErrDebugOutput) {
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
+    }
+
     if (cb.vin.empty()) {
         const std::string msg = strprintf("%s: first transaction is missing coinbase input; unable to customize work to miner", __func__);
         LogPrint("stratum", "%s\n", msg);
@@ -895,8 +902,12 @@ std::string GetWorkUnit(StratumClient& client)
     }
 
     {
-        static const std::vector<unsigned char> dummy(4, 0x00); // extranonce2
-        CustomizeWork(client, current_work, client.m_addr, client.ExtraNonce1(job_id), dummy, cb, bf, cb_branch);
+        // TODO: make ExtraNonce1 return 4 bytes values, instead of 8
+        std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
+        extranonce1.resize(4);
+
+        static const std::vector<unsigned char> dummy(32-extranonce1.size(), 0x00); // extranonce2
+        CustomizeWork(client, current_work, client.m_addr, extranonce1, dummy, cb, bf, cb_branch);
 
         current_work.GetBlock().vtx[0] = cb;
         current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
@@ -1030,18 +1041,34 @@ std::string GetWorkUnit(StratumClient& client)
          + mining_notify.write()  + "\n";
 }
 
-bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork& current_work, const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2, boost::optional<uint32_t> nVersion, uint32_t nTime, uint32_t nNonce)
+bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork& current_work, const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2, boost::optional<uint32_t> nVersion, uint32_t nTime, const std::vector<unsigned char>& sol)
 {
-    if (extranonce1.size() != 8) {
-        std::string msg = strprintf("extranonce1 is wrong length (received %d bytes; expected %d bytes", extranonce2.size(), 8);
+
+    if (fstdErrDebugOutput && extranonce1.size() > 3) {
+        std::string sExtraNonce1 = HexStr(extranonce1);
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, extranonce1[0], extranonce1[1], extranonce1[2], extranonce1[3], sExtraNonce1) << std::endl;
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " extranonce1.size() = "  << extranonce1.size() << std::endl;
+    }
+
+    if (extranonce1.size() != 4) {
+        std::string msg = strprintf("extranonce1 is wrong length (received %d bytes; expected %d bytes", extranonce1.size(), 4);
         LogPrint("stratum", "%s\n", msg);
         throw JSONRPCError(RPC_INVALID_PARAMETER, msg);
     }
-    if (extranonce2.size() != 4) {
-        std::string msg = strprintf("%s: extranonce2 is wrong length (received %d bytes; expected %d bytes", __func__, extranonce2.size(), 4);
+    if (extranonce2.size() != 28) {
+        std::string msg = strprintf("%s: extranonce2 is wrong length (received %d bytes; expected %d bytes", __func__, extranonce2.size(), 28);
         LogPrint("stratum", "%s\n", msg);
         throw JSONRPCError(RPC_INVALID_PARAMETER, msg);
     }
+
+    // TODO: change hardcoded constants on actual determine of solution size, depends on equihash algo type: 200.9, etc.
+    if (sol.size() != 1347) {
+        std::string msg = strprintf("%s: solution is wrong length (received %d bytes; expected %d bytes", __func__, extranonce2.size(), 1347);
+        LogPrint("stratum", "%s\n", msg);
+        throw JSONRPCError(RPC_INVALID_PARAMETER, msg);
+    }
+
+    // check equihash solution, VerifyEH (!)
 
     CMutableTransaction cb, bf;
     std::vector<uint256> cb_branch;
@@ -1128,7 +1155,11 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         blkhdr.nBits = current_work.GetBlock().nBits;
         // blkhdr.nNonce = nNonce;
         // nNonce <<= 32; nNonce >>= 16; // clear the top and bottom 16 bits (for local use as thread flags and counters)
-        blkhdr.nNonce = ArithToUint256(nNonce);
+        //uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
+
+        // (!) should combime extranonce1 and extranonce2
+        arith_uint256 nonce(0);
+        blkhdr.nNonce = ArithToUint256(nonce);
 
         //const CChainParams& chainparams = Params();
 
@@ -1155,7 +1186,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nTime = nTime;
             // block.nNonce = nNonce;
             // nNonce <<= 32; nNonce >>= 16; // clear the top and bottom 16 bits (for local use as thread flags and counters)
-            block.nNonce = ArithToUint256(nNonce);
+            block.nNonce = ArithToUint256(nonce);
 
             std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
             // res = ProcessNewBlock(Params(), pblock, true, NULL);
@@ -1471,8 +1502,25 @@ UniValue stratum_mining_configure(StratumClient& client, const UniValue& params)
 
 UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
 {
+    // {"id": 4, "method": "mining.submit", "params": ["WORKER_NAME", "JOB_ID", "TIME", "NONCE_2", "EQUIHASH_SOLUTION"]}\n
+
+    // NONCE_1 is first part of the block header nonce (in hex).
+    // By protocol, Zcash's nonce is 32 bytes long. The miner will pick NONCE_2 such that len(NONCE_2) = 32 - len(NONCE_1). Please note that Stratum use hex encoding, so you have to convert NONCE_1 from hex to binary before.
+    // NONCE_2 is the second part of the block header nonce.
+    /**
+     *
+     * {"method":"mining.submit","params":[
+        [0] WORKER_NAME "RDeckerSubnU8QVgrhj27apzUvbVK3pnTk",
+        [1] JOB_ID "1",
+        [2] TIME "0eaec560",
+        [3] NONCE_2 "0000000000000000d890000001000000000000000000000000000000",
+        [4] EQUIHASH_SOLUTION(1347) "fd400501762fe7c0d228a4b249727f52d85c3d5d989b3f9d07148506820a50e6db2ba3456b4ccfb168d7eb65651c7d7b893d87fb77077b56224a6fc9b9ca283b7a44a25be67d956ee55f9aaeca80eae765076495fd2eb50cf3e279a68dfd15ae6b30e911db6331d6717f352510b5834d3045db3833cdf74d1fe8379ab7b4fe46fe0d855c964085d5779701a25dbcd601ea87fb5d4bbe16c39e9c5fa22c874b4922605ed21411353cef39ce02b954a09961742d8011060a3c45f6b5b316d4a1d75530bd45722945d7a8d4698e75f49b86a485b7f1851b47d10d66d74eebb492c4269d34ca3691a459a80427f79f6d01e469bb250715fc49420d6e87383b598804bdf8b50b8510e44fd0740aa5650ed5ba19543c8657f67b5164d610bbb0ab75da1c48e81e9a8a9861bc119a31c695c5c3530ae271cf9ab4a2fa08d2b4fc851e273c324dc926d6901ca20ba5fed13118f12925760871909e8351d9e944c2959a61bf74238a587dd32826de63ab4819473bb3fad67c9a54baeddd137cb6350a25969531fa055dee51464b36cbdfb6afc4be0cee0f0fe11188c8d70d0238b3ba0c6459cd34d8b7bd8b1cdaa2b7728d51269707a70c54faac778eb4bcb6492e5fcc32406ed87fdfaecc52c9f461af3f4c3c51b529e2ab9a0e15a15b3cdcb35fe3bfe4854952ae975e3171cd2600a54509d386d45ecf668b5a17249b157a13212d0e465bc1796048d63c7b4027cb0850b9607261800e4fe6217e1fba2a28601aec9b524dac787a6c14df668a7c4fabf51f8885be7ed84ca72d0ff9a7491fddae1f5309441d243cb6d5c5c4f45a08b1b858bd15ef4d1ca1565c39000f9298b52e4221723457a0ec2e904aa6cd96e854cd8c1bbd07f1c9237c831d694817227aafe7873c43826e691d3971e82e87b538c42a48603696075b19c72b85c7d20863635621da1939d9024a434f6d840cac7a30058a51650485eabf9c0735163fd9b468249ea5889c62b4f739f58665d7f8c5010a661c1355ea7e9d85b6a18424b0027e86df5aa42b1bc2bb7a38b69c8db620251c4138b69956235640c502e26185d923a045777919984e71558edb77fb54981c6ac3dc979cd0b4f704874f02536daae894da78f31913554f91a30d6badc935fe58cc9d29d152138dde520ddb9906966e077ee3380641ce88fa74a658245202a8183e1807100c3f7d22df6577f309e4d85429e94a6f6f5dbaec3653ca6414bf6ed8794db84b7860be1984cb525b235cdb263cd527c74aa6d336615e1d361f4965ddad1fd191bc4a72fa92acc13a7c92b6e0ee077d70911004f422813e408a49ba38b950ead458b72cacb1ede9e35e2fd002eaaad0ecc2cf62801e4fe010a2cfd7190c51337513f1819acf170dda5f3b23452f36d28c20509a39fedd658f45c5e58a02feb64b0e027e05804350afc3220e53fe1761e93d018f3be9eb3554ecc98fe9fdc584ac06c0dcd63812180e94876f42f2955e242358d590a8b521b641b9729e6c7dcf6164571758ac2b2ee7656f0b0e986abf7f6b569daca304c944ded083ff202a80e8636fe9aeae39707401b321a6094c4a59cc7bcec9852189c746697963f7062304d57335795ec60dd49081a4329d3b1a8c9d55f67d11f36fb54133e67fe8a362a1f8db601aa054d97d3002f898374fd201f10af65393c9c3634e0139551e362da976b7aa0f4f8156aef59620bd24a216663784d205ef5976aa3cf6a9eed571de7cb350a355c35b67c621184608f72357d32d49842e5534f232567ed7ef9a0edc109b3b487e86d1cdd9231969a76e5d7c54bc3e28942e99301a89c13895c2bc5acac2111f53182951183f50c839601dc5fabfd39d95258c79b93a140ab727288179ce1262b13e8cc5a829edf26e7d241fbf6b"
+        ],
+        "id":10}
+     */
+
     const std::string method("mining.submit");
-    BoundParams(method, params, 5, 7);
+    BoundParams(method, params, 5,5);
     // First parameter is the client username, which is ignored.
 
     uint256 job_id = ParseUInt256(params[1], "job_id");
@@ -1480,29 +1528,47 @@ UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
         LogPrint("stratum", "Received completed share for unknown job_id : %s\n", HexStr(job_id.begin(), job_id.end()));
         return false;
     }
+
     StratumWork &current_work = work_templates[job_id];
 
-    std::vector<unsigned char> extranonce2 = ParseHexV(params[2], "extranonce2");
-    if (extranonce2.size() != 4) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("extranonce2 is wrong length (received %d bytes; expected %d bytes", extranonce2.size(), 4));
-    }
-    uint32_t nTime = ParseHexInt4(params[3], "nTime");
-    uint32_t nNonce = ParseHexInt4(params[4], "nNonce");
-    boost::optional<uint32_t> nVersion;
-    if (params.size() > 5) {
-        nVersion = ParseHexInt4(params[5], "nVersion");
-    }
-    std::vector<unsigned char> extranonce1;
-    if (params.size() > 6) {
-        extranonce1 = ParseHexV(params[6], "extranonce1");
-        if (extranonce1.size() != 8) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Expected 8 bytes for extranonce1 field; received %d", extranonce1.size()));
-        }
-    } else {
-        extranonce1 = client.ExtraNonce1(job_id);
+    uint32_t nTime = ParseHexInt4(params[2], "nTime");
+
+    std::vector<unsigned char> extranonce2 = ParseHexV(params[3], "extranonce2");
+    if (extranonce2.size() != 32 - 4) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("extranonce2 is wrong length (received %d bytes; expected %d bytes", extranonce2.size(), 32 - 4));
     }
 
-    SubmitBlock(client, job_id, current_work, extranonce1, extranonce2, nVersion, nTime, nNonce);
+    std::vector<unsigned char> sol = ParseHexV(params[4], "solution");
+    if (sol.size() != 1347) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("extranonce2 is wrong length (received %d bytes; expected %d bytes", sol.size(), 1347));
+    }
+
+    std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
+    // client.ExtraNonce1( return 8 bytes, but we need only 4
+    extranonce1.resize(4);
+
+    boost::optional<uint32_t> nVersion = 4; // block version always 4
+
+    // TODO: check varint len bytes, should be always 0xfd, 0x40, 0x05
+    // TODO: check equihash solution
+
+    // uint32_t nTime = ParseHexInt4(params[3], "nTime");
+    // uint32_t nNonce = ParseHexInt4(params[4], "nNonce");
+    // boost::optional<uint32_t> nVersion; // (?)
+    // if (params.size() > 5) {
+    //     nVersion = ParseHexInt4(params[5], "nVersion");
+    // }
+    // std::vector<unsigned char> extranonce1;
+    // if (params.size() > 6) {
+    //     extranonce1 = ParseHexV(params[6], "extranonce1");
+    //     if (extranonce1.size() != 8) {
+    //         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Expected 8 bytes for extranonce1 field; received %d", extranonce1.size()));
+    //     }
+    // } else {
+    //     extranonce1 = client.ExtraNonce1(job_id);
+    // }
+
+    SubmitBlock(client, job_id, current_work, extranonce1, extranonce2, nVersion, nTime, sol);
 
     return true;
 }

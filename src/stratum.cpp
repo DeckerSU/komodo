@@ -54,8 +54,11 @@
 #include "main.h" // cs_main
 #include <boost/foreach.hpp>
 #include "ui_interface.h"
+#include <memory> // make_unique
 
 extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
+extern UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // from rpc/blockchain.cpp
+static const bool fstdErrDebugOutput = true;
 
 /**
  * Begin of helper routines,
@@ -65,134 +68,277 @@ extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
 
 namespace { // better to use anonymous namespace for helper routines
 
-// TODO: fix places which using CSubNet(...) constructors with numeric (/8, /16, /24, etc.) mask
+    // TODO: fix places which using CSubNet(...) constructors with numeric (/8, /16, /24, etc.) mask
 
-/** Check if a network address is allowed to access the Stratum server */
-bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNetAddr& netaddr)
-{
-    if (!netaddr.IsValid())
+    /** Check if a network address is allowed to access the Stratum server */
+    bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNetAddr& netaddr)
+    {
+        if (!netaddr.IsValid())
+            return false;
+        for(const CSubNet& subnet : allowed_subnets)
+            if (subnet.Match(netaddr))
+                return true;
         return false;
-    for(const CSubNet& subnet : allowed_subnets)
-        if (subnet.Match(netaddr))
-            return true;
-    return false;
-}
-
-inline bool IsArgSet(const std::string& strArg)
-{
-    return mapArgs.count(strArg);
-}
-
-inline std::vector<std::string> GetArgs(const std::string& strArg)
-{
-    if (IsArgSet(strArg))
-        return mapMultiArgs.at(strArg);
-    return {};
-}
-
-/** Determine what addresses to bind to */
-bool InitEndpointList(const std::string& which, int defaultPort, std::vector<std::pair<std::string, uint16_t> >& endpoints)
-{
-    endpoints.clear();
-
-    // Determine what addresses to bind to
-    const std::string opt_allowip = "-" + which + "allowip";
-    const std::string opt_bind = "-" + which + "bind";
-    if (IsArgSet(opt_allowip)) { // Default to loopback if not allowing external IPs
-        endpoints.push_back(std::make_pair("::1", defaultPort));
-        endpoints.push_back(std::make_pair("127.0.0.1", defaultPort));
-        if (IsArgSet(opt_bind)) {
-            LogPrintf("WARNING: option %s was ignored because %s was not specified, refusing to allow everyone to connect\n", opt_bind, opt_allowip);
-        }
-    } else if (IsArgSet(opt_bind)) { // Specific bind address
-        for (const std::string& strRPCBind : GetArgs(opt_bind)) {
-            int port = defaultPort;
-            std::string host;
-            SplitHostPort(strRPCBind, port, host);
-            endpoints.push_back(std::make_pair(host, port));
-        }
-    } else { // No specific bind address specified, bind to any
-        endpoints.push_back(std::make_pair("::", defaultPort));
-        endpoints.push_back(std::make_pair("0.0.0.0", defaultPort));
     }
 
-    return !endpoints.empty();
-}
-
-bool LookupHost(const char *pszName, CNetAddr& addr, bool fAllowLookup)
-{
-    std::vector<CNetAddr> vIP;
-    LookupHost(pszName, vIP, 1, fAllowLookup);
-    if(vIP.empty())
-        return false;
-    addr = vIP.front();
-    return true;
-}
-
-bool LookupSubNet(const char* pszName, CSubNet& ret)
-{
-    std::string strSubnet(pszName);
-    size_t slash = strSubnet.find_last_of('/');
-    std::vector<CNetAddr> vIP;
-
-    std::string strAddress = strSubnet.substr(0, slash);
-    if (LookupHost(strAddress.c_str(), vIP, 1, false))
+    inline bool IsArgSet(const std::string& strArg)
     {
-        CNetAddr network = vIP[0];
-        if (slash != strSubnet.npos)
-        {
-            std::string strNetmask = strSubnet.substr(slash + 1);
-            int32_t n;
-            // IPv4 addresses start at offset 12, and first 12 bytes must match, so just offset n
-            if (ParseInt32(strNetmask, &n)) { // If valid number, assume /24 syntax
-                ret = CSubNet(network.ToString()); // TODO: should be CSubNet(const CNetAddr &addr, int32_t mask), where mask = n
-                return ret.IsValid();
+        return mapArgs.count(strArg);
+    }
+
+    inline std::vector<std::string> GetArgs(const std::string& strArg)
+    {
+        if (IsArgSet(strArg))
+            return mapMultiArgs.at(strArg);
+        return {};
+    }
+
+    /** Determine what addresses to bind to */
+    bool InitEndpointList(const std::string& which, int defaultPort, std::vector<std::pair<std::string, uint16_t> >& endpoints)
+    {
+        endpoints.clear();
+
+        // Determine what addresses to bind to
+        const std::string opt_allowip = "-" + which + "allowip";
+        const std::string opt_bind = "-" + which + "bind";
+        if (IsArgSet(opt_allowip)) { // Default to loopback if not allowing external IPs
+            endpoints.push_back(std::make_pair("::1", defaultPort));
+            endpoints.push_back(std::make_pair("127.0.0.1", defaultPort));
+            if (IsArgSet(opt_bind)) {
+                LogPrintf("WARNING: option %s was ignored because %s was not specified, refusing to allow everyone to connect\n", opt_bind, opt_allowip);
             }
-            else // If not a valid number, try full netmask syntax
+        } else if (IsArgSet(opt_bind)) { // Specific bind address
+            for (const std::string& strRPCBind : GetArgs(opt_bind)) {
+                int port = defaultPort;
+                std::string host;
+                SplitHostPort(strRPCBind, port, host);
+                endpoints.push_back(std::make_pair(host, port));
+            }
+        } else { // No specific bind address specified, bind to any
+            endpoints.push_back(std::make_pair("::", defaultPort));
+            endpoints.push_back(std::make_pair("0.0.0.0", defaultPort));
+        }
+
+        return !endpoints.empty();
+    }
+
+    bool LookupHost(const char *pszName, CNetAddr& addr, bool fAllowLookup)
+    {
+        std::vector<CNetAddr> vIP;
+        LookupHost(pszName, vIP, 1, fAllowLookup);
+        if(vIP.empty())
+            return false;
+        addr = vIP.front();
+        return true;
+    }
+
+    bool LookupSubNet(const char* pszName, CSubNet& ret)
+    {
+        std::string strSubnet(pszName);
+        size_t slash = strSubnet.find_last_of('/');
+        std::vector<CNetAddr> vIP;
+
+        std::string strAddress = strSubnet.substr(0, slash);
+        if (LookupHost(strAddress.c_str(), vIP, 1, false))
+        {
+            CNetAddr network = vIP[0];
+            if (slash != strSubnet.npos)
             {
-                // Never allow lookup for netmask
-                if (LookupHost(strNetmask.c_str(), vIP, 1, false)) {
-                    //ret = CSubNet(network, vIP[0]);
-                    ret = CSubNet(network.ToString()); // TODO: should be CSubNet(const CNetAddr &addr, const CNetAddr &mask), where mask = vIP[0]
+                std::string strNetmask = strSubnet.substr(slash + 1);
+                int32_t n;
+                // IPv4 addresses start at offset 12, and first 12 bytes must match, so just offset n
+                if (ParseInt32(strNetmask, &n)) { // If valid number, assume /24 syntax
+                    ret = CSubNet(network.ToString()); // TODO: should be CSubNet(const CNetAddr &addr, int32_t mask), where mask = n
                     return ret.IsValid();
                 }
+                else // If not a valid number, try full netmask syntax
+                {
+                    // Never allow lookup for netmask
+                    if (LookupHost(strNetmask.c_str(), vIP, 1, false)) {
+                        //ret = CSubNet(network, vIP[0]);
+                        ret = CSubNet(network.ToString()); // TODO: should be CSubNet(const CNetAddr &addr, const CNetAddr &mask), where mask = vIP[0]
+                        return ret.IsValid();
+                    }
+                }
+            }
+            else
+            {
+                ret = CSubNet(network.ToString());
+                return ret.IsValid();
             }
         }
-        else
+        return false;
+    }
+
+    /** Initialize ACL list for HTTP server */
+    bool InitSubnetAllowList(const std::string which, std::vector<CSubNet>& allowed_subnets)
+    {
+        allowed_subnets.clear();
+        CNetAddr localv4;
+        CNetAddr localv6;
+        LookupHost("127.0.0.1", localv4, false);
+        LookupHost("::1", localv6, false);
+
+        allowed_subnets.push_back(CSubNet(localv4.ToString(), false));      // always allow IPv4 local subnet (TODO: should be CSubNet(const CNetAddr &addr, int32_t mask), where mask = 8)
+        allowed_subnets.push_back(CSubNet(localv6.ToString(), false));      // always allow IPv6 localhost
+
+        const std::string opt_allowip = "-" + which + "allowip";
+        for (const std::string& strAllow : GetArgs(opt_allowip)) {
+            CSubNet subnet;
+            LookupSubNet(strAllow.c_str(), subnet);
+            if (!subnet.IsValid()) {
+                uiInterface.ThreadSafeMessageBox(
+                    strprintf("Invalid %s subnet specification: %s. Valid are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24).", opt_allowip, strAllow),
+                    "", CClientUIInterface::MSG_ERROR);
+                return false;
+            }
+            allowed_subnets.push_back(subnet);
+        }
+        return true;
+    }
+
+    double GetDifficultyFromBits(uint32_t bits) {
+
+        uint32_t powLimit = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
+        int nShift = (bits >> 24) & 0xff;
+        int nShiftAmount = (powLimit >> 24) & 0xff;
+
+        double dDiff =
+            (double)(powLimit & 0x00ffffff) /
+            (double)(bits & 0x00ffffff);
+
+        while (nShift < nShiftAmount)
         {
-            ret = CSubNet(network.ToString());
-            return ret.IsValid();
+            dDiff *= 256.0;
+            nShift++;
         }
+        while (nShift > nShiftAmount)
+        {
+            dDiff /= 256.0;
+            nShift--;
+        }
+
+        return dDiff;
     }
-    return false;
+
 }
 
-/** Initialize ACL list for HTTP server */
-bool InitSubnetAllowList(const std::string which, std::vector<CSubNet>& allowed_subnets)
-{
-    allowed_subnets.clear();
-    CNetAddr localv4;
-    CNetAddr localv6;
-    LookupHost("127.0.0.1", localv4, false);
-    LookupHost("::1", localv6, false);
-    
-    allowed_subnets.push_back(CSubNet(localv4.ToString(), false));      // always allow IPv4 local subnet (TODO: should be CSubNet(const CNetAddr &addr, int32_t mask), where mask = 8)
-    allowed_subnets.push_back(CSubNet(localv6.ToString(), false));      // always allow IPv6 localhost
+namespace ccminer {
 
-    const std::string opt_allowip = "-" + which + "allowip";
-    for (const std::string& strAllow : GetArgs(opt_allowip)) {
-        CSubNet subnet;
-        LookupSubNet(strAllow.c_str(), subnet);
-        if (!subnet.IsValid()) {
-            uiInterface.ThreadSafeMessageBox(
-                strprintf("Invalid %s subnet specification: %s. Valid are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24).", opt_allowip, strAllow),
-                "", CClientUIInterface::MSG_ERROR);
+    bool hex2bin(void *output, const char *hexstr, size_t len)
+    {
+        unsigned char *p = (unsigned char *) output;
+        char hex_byte[4];
+        char *ep;
+
+        hex_byte[2] = '\0';
+
+        while (*hexstr && len) {
+            if (!hexstr[1]) {
+                LogPrint("stratum", "hex2bin str truncated");
+                return false;
+            }
+            hex_byte[0] = hexstr[0];
+            hex_byte[1] = hexstr[1];
+            *p = (unsigned char) strtol(hex_byte, &ep, 16);
+            if (*ep) {
+                LogPrint("stratum", "hex2bin failed on '%s'", hex_byte);
+                return false;
+            }
+            p++;
+            hexstr += 2;
+            len--;
+        }
+
+        return (len == 0 && *hexstr == 0) ? true : false;
+    }
+    // equi/equi-stratum.cpp
+
+    // ZEC uses a different scale to compute diff...
+    // sample targets to diff (stored in the reverse byte order in work->target)
+    // 0007fff800000000000000000000000000000000000000000000000000000000 is stratum diff 32
+    // 003fffc000000000000000000000000000000000000000000000000000000000 is stratum diff 4
+    // 00ffff0000000000000000000000000000000000000000000000000000000000 is stratum diff 1
+
+    double target_to_diff_equi(uint32_t* target)
+    {
+        unsigned char* tgt = (unsigned char*) target;
+        uint64_t m =
+            (uint64_t)tgt[30] << 24 |
+            (uint64_t)tgt[29] << 16 |
+            (uint64_t)tgt[28] << 8  |
+            (uint64_t)tgt[27] << 0;
+
+        if (!m)
+            return 0.;
+        else
+            return (double)0xffff0000UL/m;
+    }
+
+    void diff_to_target_equi(uint32_t *target, double diff)
+    {
+        uint64_t m;
+        int k;
+
+        for (k = 6; k > 0 && diff > 1.0; k--)
+            diff /= 4294967296.0;
+        m = (uint64_t)(4294901760.0 / diff);
+        if (m == 0 && k == 6)
+            memset(target, 0xff, 32);
+        else {
+            memset(target, 0, 32);
+            target[k + 1] = (uint32_t)(m >> 8);
+            target[k + 2] = (uint32_t)(m >> 40);
+            //memset(target, 0xff, 6*sizeof(uint32_t));
+            for (k = 0; k < 28 && ((uint8_t*)target)[k] == 0; k++)
+                ((uint8_t*)target)[k] = 0xff;
+        }
+    }
+
+    /* compute nbits to get the network diff */
+    double equi_network_diff(uint32_t nbits)
+    {
+        //KMD bits: "1e 015971",
+        //KMD target: "00 00 015971000000000000000000000000000000000000000000000000000000",
+        //KMD bits: "1d 686aaf",
+        //KMD target: "00 0000 686aaf0000000000000000000000000000000000000000000000000000",
+        // uint32_t nbits = work->data[26];
+
+        uint32_t bits = (nbits & 0xffffff);
+        int16_t shift = (/*swab32*/bswap_32(nbits) & 0xff);
+        shift = (31 - shift) * 8; // 8 bits shift for 0x1e, 16 for 0x1d
+        uint64_t tgt64 = /*swab32*/bswap_32(bits);
+        tgt64 = tgt64 << shift;
+        // applog_hex(&tgt64, 8);
+        uint8_t net_target[32] = { 0 };
+        for (int b=0; b<8; b++)
+            net_target[31-b] = ((uint8_t*)&tgt64)[b];
+        // applog_hex(net_target, 32);
+        double d = target_to_diff_equi((uint32_t*)net_target);
+        return d;
+    }
+
+    double equi_stratum_target_to_diff(const std::string& target)
+    {
+        uint8_t target_bin[32], target_be[32];
+
+        const char *target_hex = target.c_str();
+        if (!target_hex || strlen(target_hex) == 0)
             return false;
+
+        hex2bin(target_bin, target_hex, 32);
+        memset(target_be, 0xff, 32);
+        int filled = 0;
+        for (int i=0; i<32; i++) {
+            if (filled == 3) break;
+            target_be[31-i] = target_bin[i];
+            if (target_bin[i]) filled++;
         }
-        allowed_subnets.push_back(subnet);
+
+        double d = target_to_diff_equi((uint32_t*) &target_be);
+        return d;
     }
-    return true;
-}
+
 
 }
 
@@ -245,9 +391,11 @@ std::vector<unsigned char> StratumClient::ExtraNonce1(uint256 job_id) const
 {
     CSHA256 nonce_hasher;
     nonce_hasher.Write(m_secret.begin(), 32);
+
     if (m_supports_extranonce) {
         nonce_hasher.Write(job_id.begin(), 32);
     }
+
     uint256 job_nonce;
     nonce_hasher.Finalize(job_nonce.begin());
     return {job_nonce.begin(), job_nonce.begin()+8};
@@ -447,6 +595,18 @@ static std::string GetExtraNonceRequest(StratumClient& client, const uint256& jo
     return ret;
 }
 
+/**
+ * @brief
+ *
+ * @param client
+ * @param current_work
+ * @param addr
+ * @param extranonce1
+ * @param extranonce2
+ * @param cb
+ * @param bf
+ * @param cb_branch
+ */
 void CustomizeWork(const StratumClient& client, const StratumWork& current_work, const CBitcoinAddress& addr, const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2, CMutableTransaction& cb, CMutableTransaction& bf, std::vector<uint256>& cb_branch)
 {
     if (current_work.GetBlock().vtx.empty()) {
@@ -454,7 +614,9 @@ void CustomizeWork(const StratumClient& client, const StratumWork& current_work,
         LogPrint("stratum", "%s\n", msg);
         throw std::runtime_error(msg);
     }
+
     cb = CMutableTransaction(current_work.GetBlock().vtx[0]);
+
     if (cb.vin.size() != 1) {
         const std::string msg = strprintf("%s: unexpected number of inputs; is this even a coinbase transaction?", __func__);
         LogPrint("stratum", "%s\n", msg);
@@ -477,21 +639,23 @@ void CustomizeWork(const StratumClient& client, const StratumWork& current_work,
     //        CScript()
     //     << cb.lock_height
     //     << nonce;
-    // if (current_work.m_aux_hash2) {
+
+    // if (current_work.m_aux_hash2)
+    // {
     //     cb.vin[0].scriptSig.insert(cb.vin[0].scriptSig.end(),
     //                                current_work.m_aux_hash2->begin(),
     //                                current_work.m_aux_hash2->end());
-    // } else {
-    //     if (cb.vout.empty()) {
-    //         const std::string msg = strprintf("%s: coinbase transaction is missing outputs; unable to customize work to miner", __func__);
-    //         LogPrint("stratum", "%s\n", msg);
-    //         throw std::runtime_error(msg);
-    //     }
-    //     if (cb.vout[0].scriptPubKey == (CScript() << OP_FALSE)) {
-    //         cb.vout[0].scriptPubKey =
-    //             GetScriptForDestination(addr.Get());
-    //     }
-    // }
+    // } else
+    {
+        if (cb.vout.empty()) {
+            const std::string msg = strprintf("%s: coinbase transaction is missing outputs; unable to customize work to miner", __func__);
+            LogPrint("stratum", "%s\n", msg);
+            throw std::runtime_error(msg);
+        }
+        if (cb.vout[0].scriptPubKey == (CScript() << OP_FALSE)) {
+            cb.vout[0].scriptPubKey = GetScriptForDestination(addr.Get());
+        }
+    }
 
     // cb_branch = current_work.m_cb_branch;
     // if (!current_work.m_aux_hash2 && current_work.m_is_witness_enabled) {
@@ -558,7 +722,7 @@ std::string GetWorkUnit(StratumClient& client)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Stratum client not authorized.  Use mining.authorize first, with a Komodo address as the username.");
     }
 
-    static CBlockIndex* tip = NULL;
+    static CBlockIndex* tip = NULL; // pindexPrev
     static uint256 job_id;
     static unsigned int transactions_updated_last = 0;
     static int64_t last_update_time = 0;
@@ -568,28 +732,46 @@ std::string GetWorkUnit(StratumClient& client)
     // a fake bitcoin block which commits to our Komodo block.  Then the
     // coinbase is updated to commit to the auxiliary proof-of-work solution and
     // the native proof-of-work is solved.
-    if (half_solved_work && (tip != chainActive.Tip() || !work_templates.count(*half_solved_work))) {
-        half_solved_work = boost::none;
-    }
+    // if (half_solved_work && (tip != chainActive.Tip() || !work_templates.count(*half_solved_work))) {
+    //     half_solved_work = boost::none;
+    // }
 
-    if (half_solved_work) {
-        job_id = *half_solved_work;
-    } else
-    if (tip != chainActive.Tip() || (mempool.GetTransactionsUpdated() != transactions_updated_last && (GetTime() - last_update_time) > 5) || !work_templates.count(job_id))
+    // if (half_solved_work) {
+    //     job_id = *half_solved_work;
+    // } else
+
+    // rpc/mining.cpp -> getblocktemplate -> Update block
+    if ( tip != chainActive.Tip() ||
+        (mempool.GetTransactionsUpdated() != transactions_updated_last && (GetTime() - last_update_time) > 5) ||
+        !work_templates.count(job_id))
     {
         CBlockIndex *tip_new = chainActive.Tip();
-        const CScript script = CScript() << OP_FALSE;
-        //std::unique_ptr<CBlockTemplate> new_work = BlockAssembler(Params()).CreateNewBlock(script);
-        
-        std::unique_ptr<CBlockTemplate> new_work(new CBlockTemplate());
-        // if(!new_work.get()) {
-        //     throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
-        // }
+
+        // CPubKey pubkey;
+        // const CScript scriptPubKeyIn = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
+        // std::unique_ptr<CBlockTemplate> new_work(CreateNewBlock(pubkey, scriptPubKeyIn, KOMODO_MAXGPUCOUNT, false)); // explicit unique_ptr( pointer p ) noexcept;
+
+        /**
+         * We will check script later inside CustomizeWork, if it will be == CScript() << OP_FALSE it will mean
+         * that work need to be customized, and in that case cb.vout[0],scriptPubKey will be set to GetScriptForDestination(addr.Get()) .
+         * In other words to the address with which stratum client is authorized.
+        */
+        const CScript scriptDummy = CScript() << OP_FALSE;
+        std::unique_ptr<CBlockTemplate> new_work(CreateNewBlock(CPubKey(), scriptDummy, KOMODO_MAXGPUCOUNT, false)); // std::unique_ptr<CBlockTemplate> new_work = BlockAssembler(Params()).CreateNewBlock(script);
+
         if (!new_work) {
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
         }
+
+        if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
+
         // So that block.GetHash() is correct
         //new_work->block.hashMerkleRoot = BlockMerkleRoot(new_work->block);
+        new_work->block.hashMerkleRoot = new_work->block.BuildMerkleTree();
+        // NB! here we have merkle with dummy script in coinbase, after CustomizeWork
+        // we should recalculate it (!)
+
+        if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
 
         job_id = new_work->block.GetHash();
         //work_templates[job_id] = StratumWork(*new_work, new_work->block.vtx[0]->HasWitness());
@@ -637,186 +819,193 @@ std::string GetWorkUnit(StratumClient& client)
 
     StratumWork& current_work = work_templates[job_id];
 
-    // if (client.m_supports_aux && !current_work.GetBlock().m_aux_pow.IsNull() && !current_work.m_aux_hash2 && !client.m_aux_addr.empty()) {
-    //     const AuxProofOfWork& aux_pow = current_work.GetBlock().m_aux_pow;
-
-    //     CHashWriter secret_writer(SER_GETHASH, PROTOCOL_VERSION);
-    //     secret_writer << aux_pow.m_secret_lo;
-    //     secret_writer << aux_pow.m_secret_hi;
-    //     uint256 secret = secret_writer.GetHash();
-
-    //     UniValue commits(UniValue::VOBJ);
-    //     for (const auto& addr : client.m_aux_addr) {
-    //         uint256 hash = CustomizeCommitHash(client, addr, job_id, current_work, secret);
-    //         commits.push_back(Pair(addr.ToString(), HexStr(hash.begin(), hash.end())));
-    //     }
-
-    //     UniValue params(UniValue::VARR);
-    //     params.push_back(HexStr(job_id.begin(), job_id.end()));
-    //     params.push_back(commits);
-
-    //     unsigned char bias = current_work.GetBlock().GetBias();
-    //     uint32_t bits = aux_pow.m_commit_bits;
-    //     bits += static_cast<uint32_t>(bias / 8) << 24;
-    //     bias = bias % 8;
-    //     params.push_back(HexInt4(bits));
-    //     params.push_back(UniValue((int)bias));
-
-    //     params.push_back(UniValue(client.m_last_tip != tip));
-    //     client.m_last_tip = tip;
-    //     client.m_second_stage = false;
-
-    //     UniValue mining_aux_notify(UniValue::VOBJ);
-    //     mining_aux_notify.push_back(Pair("params", params));
-    //     mining_aux_notify.push_back(Pair("id", client.m_nextid++));
-    //     mining_aux_notify.push_back(Pair("method", "mining.aux.notify"));
-
-    //     return mining_aux_notify.write() + '\n';
-    // }
 
     CBlockIndex tmp_index;
-    // if (!current_work.GetBlock().m_aux_pow.IsNull() && !current_work.m_aux_hash2) {
-    //     // Auxiliary proof-of-work difficulty
-    //     tmp_index.nBits = current_work.GetBlock().m_aux_pow.m_commit_bits;
-    // } else 
-    {
-        // Native proof-of-work difficulty
-        tmp_index.nBits = current_work.GetBlock().nBits;
-    }
+    // Native proof-of-work difficulty
+    tmp_index.nBits = current_work.GetBlock().nBits;
     double diff = ClampDifficulty(client, GetDifficulty(&tmp_index));
 
-    UniValue set_difficulty(UniValue::VOBJ);
-    set_difficulty.push_back(Pair("id", client.m_nextid++));
-    set_difficulty.push_back(Pair("method", "mining.set_difficulty"));
-    UniValue set_difficulty_params(UniValue::VARR);
-    set_difficulty_params.push_back(UniValue(diff));
-    set_difficulty.push_back(Pair("params", set_difficulty_params));
+    // UniValue set_difficulty(UniValue::VOBJ);
+    // set_difficulty.push_back(Pair("id", client.m_nextid++));
+    // set_difficulty.push_back(Pair("method", "mining.set_difficulty"));
+    // UniValue set_difficulty_params(UniValue::VARR);
+    // set_difficulty_params.push_back(UniValue(diff));
+    // set_difficulty.push_back(Pair("params", set_difficulty_params));
+
+    UniValue set_target(UniValue::VOBJ);
+    set_target.push_back(Pair("id", client.m_nextid++));
+    set_target.push_back(Pair("method", "mining.set_target"));
+    UniValue set_target_params(UniValue::VARR);
+
+    std::string strTarget; // set_target
+    {
+        arith_uint256 hashTarget; bool fNegative,fOverflow;
+        /*
+        hashTarget.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow); // blkhdr.nBits
+        hashTarget = UintToArith256(uint256S("0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"));
+        hashTarget.SetHex("0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
+        hashTarget.SetHex("00ffff0000000000000000000000000000000000000000000000000000000000"); // komodo_diff = 15.0591, ccminer_diff = 1
+        hashTarget.SetHex("003fffc000000000000000000000000000000000000000000000000000000000"); // komodo_diff = 60.2362, ccminer_diff = 4
+        hashTarget.SetHex("0007fff800000000000000000000000000000000000000000000000000000000"); // komodo_diff = 481.89, ccminer_diff = 31.9999
+        hashTarget.SetHex("c7ff3800ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // komodo_diff = 0.0752956, ccminer_diff = 1.00303
+        hashTarget.SetHex("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"); // komodo_diff = 1, ccminer_diff = 16.9956 */
+
+        hashTarget.SetHex("00ffff0000000000000000000000000000000000000000000000000000000000"); // komodo_diff = 15.0591, ccminer_diff = 1
+
+        strTarget = hashTarget.GetHex();
+
+        if (fstdErrDebugOutput) {
+
+            // bits = GetNextWorkRequired(blockindex, nullptr, Params().GetConsensus());
+            // bits = blkhdr.nBits;
+            // GetDifficultyFromBits(0x200f0f0f) == 1
+            // %g - Use the shortest representation: %e or %f (c) http://www.cplusplus.com/reference/cstdio/printf/
+
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ <<
+                    strprintf(" target = %s, komodo_diff = %g, ccminer_diff = %g",
+                    strTarget, GetDifficultyFromBits(hashTarget.GetCompact(false)), ccminer::equi_stratum_target_to_diff(strTarget)) << std::endl;
+        }
+    }
+
+    set_target_params.push_back(UniValue(strTarget)); // TODO: send real local diff (!)
+    set_target.push_back(Pair("params", set_target_params));
+
+    // const CChainParams& chainparams = Params();
+    // const Consensus::Params &consensusParams = chainparams.GetConsensus();
+    // CMutableTransaction cb_prepare = CreateNewContextualCMutableTransaction(consensusParams, tip->GetHeight() + 1);
 
     CMutableTransaction cb, bf;
     std::vector<uint256> cb_branch;
+
+    if (fstdErrDebugOutput)
+    {
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] cb = " << CTransaction(cb).ToString() << std::endl;
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
+    }
+
     {
         static const std::vector<unsigned char> dummy(4, 0x00); // extranonce2
         CustomizeWork(client, current_work, client.m_addr, client.ExtraNonce1(job_id), dummy, cb, bf, cb_branch);
+
+        current_work.GetBlock().vtx[0] = cb;
+        current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
+
+    }
+
+    if (fstdErrDebugOutput)
+    {
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] cb = " << CTransaction(cb).ToString() << std::endl;
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
     }
 
     CBlockHeader blkhdr;
-    // if (!current_work.GetBlock().m_aux_pow.IsNull() && !current_work.m_aux_hash2) {
-    //     // Setup auxiliary proof-of-work
-    //     const AuxProofOfWork& aux_pow = current_work.GetBlock().m_aux_pow;
+    // Setup native proof-of-work
 
-    //     CMutableTransaction cb2(cb);
-    //     cb2.vin[0].scriptSig = CScript();
-    //     cb2.vin[0].nSequence = 0;
+    // blkhdr.nVersion = current_work.GetBlock().nVersion;
+    // blkhdr.hashPrevBlock = current_work.GetBlock().hashPrevBlock;
+    // blkhdr.nTime = current_work.GetBlock().nTime;
+    // blkhdr.nBits = current_work.GetBlock().nBits;
 
-    //     blkhdr.nVersion = aux_pow.m_commit_version;
-    //     blkhdr.hashPrevBlock = current_work.GetBlock().hashPrevBlock;
-    //     blkhdr.hashMerkleRoot = ComputeMerkleRootFromBranch(cb2.GetHash(), cb_branch, 0);
-    //     blkhdr.nTime = aux_pow.m_commit_time;
-    //     blkhdr.nBits = aux_pow.m_commit_bits;
-    //     blkhdr.nNonce = aux_pow.m_commit_nonce;
-    //     uint256 hash = blkhdr.GetHash();
-
-    //     {
-    //         CHashWriter secret(SER_GETHASH, PROTOCOL_VERSION);
-    //         secret << aux_pow.m_secret_lo;
-    //         secret << aux_pow.m_secret_hi;
-    //         MerkleHash_Sha256Midstate(hash, hash, secret.GetHash());
-    //     }
-
-    //     hash = ComputeMerkleMapRootFromBranch(hash, aux_pow.m_commit_branch, Params().GetConsensus().aux_pow_path);
-
-    //     {
-    //         CSHA256 midstate(aux_pow.m_midstate_hash.begin(),
-    //                          &aux_pow.m_midstate_buffer[0],
-    //                          aux_pow.m_midstate_length << 3);
-    //         // Write the commitment root hash.
-    //         midstate.Write(hash.begin(), 32);
-    //         // Write the commitment identifier.
-    //         static const std::array<unsigned char, 4> id
-    //             = { 0x4b, 0x4a, 0x49, 0x48 };
-    //         midstate.Write(id.begin(), 4);
-    //         // Write the transaction's nLockTime field.
-    //         CDataStream lock_time(SER_GETHASH, PROTOCOL_VERSION);
-    //         lock_time << aux_pow.m_aux_lock_time;
-    //         midstate.Write((const unsigned char*)&lock_time[0], lock_time.size());
-    //         // Double SHA-256.
-    //         midstate.Finalize(hash.begin());
-    //         CSHA256()
-    //             .Write(hash.begin(), 32)
-    //             .Finalize(hash.begin());
-    //     }
-
-    //     cb_branch.resize(1);
-    //     cb_branch[0] = hash;
-    //     blkhdr.nVersion = aux_pow.m_aux_version;
-    //     blkhdr.hashPrevBlock = aux_pow.m_aux_hash_prev_block;
-    //     blkhdr.nTime = current_work.GetBlock().nTime;
-    //     blkhdr.nBits = aux_pow.m_aux_bits;
-    // }
-
-    // else 
-    {
-        // Setup native proof-of-work
-        blkhdr.nVersion = current_work.GetBlock().nVersion;
-        blkhdr.hashPrevBlock = current_work.GetBlock().hashPrevBlock;
-        blkhdr.nTime = current_work.GetBlock().nTime;
-        blkhdr.nBits = current_work.GetBlock().nBits;
-    }
+    // copy entire blockheader created with CreateNewBlock to blkhdr
+    blkhdr = current_work.GetBlock().GetBlockHeader();
 
     // CDataStream ds(SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
     CDataStream ds(SER_GETHASH, PROTOCOL_VERSION);
+    ds << cb;
+
+    if (fstdErrDebugOutput)
+    {
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " set_target = "<< set_target.write() << std::endl;
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " ds = " << HexStr(ds, false) << std::endl;
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " cb.GetHash().ToString() = " << cb.GetHash().ToString() << std::endl;
+
+        CBlockIndex index {blkhdr};
+        index.SetHeight(tip->GetHeight() + 1);
+
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock() = " << blockToJSON(current_work.GetBlock(), &index).write() << std::endl;
+
+    }
     // ds << MakeTransactionRef(std::move(cb));
     // if (ds.size() < (4 + 1 + 32 + 4 + 1)) {
     //     throw std::runtime_error("Serialized transaction is too small to be parsed.  Is this even a coinbase?");
     // }
 
-    size_t pos = 4 + 1 + 32 + 4 + 1 + ds[4+1+32+4] - (current_work.m_aux_hash2? 32: 0);
-    if (ds.size() < pos) {
-        throw std::runtime_error("Customized coinbase transaction does not contain extranonce field at expected location.");
-    }
-
-    std::string cb1 = HexStr(&ds[0], &ds[pos-4-8]);
-    std::string cb2 = HexStr(&ds[pos], &ds[ds.size()]);
-
-    UniValue params(UniValue::VARR);
-    params.push_back(HexStr(job_id.begin(), job_id.end()));
-    // For reasons of who-the-heck-knows-why, stratum byte-swaps each
-    // 32-bit chunk of the hashPrevBlock.
-    uint256 hashPrevBlock(blkhdr.hashPrevBlock);
-    for (int i = 0; i < 256/32; ++i) {
-        ((uint32_t*)hashPrevBlock.begin())[i] = bswap_32(
-        ((uint32_t*)hashPrevBlock.begin())[i]);
-    }
-    params.push_back(HexStr(hashPrevBlock.begin(), hashPrevBlock.end()));
-    params.push_back(cb1);
-    params.push_back(cb2);
-
-    UniValue branch(UniValue::VARR);
-    for (const auto& hash : cb_branch) {
-        branch.push_back(HexStr(hash.begin(), hash.end()));
-    }
-    params.push_back(branch);
-
-    // if (!current_work.m_aux_hash2) {
-    //     int64_t delta = UpdateTime(&blkhdr, Params().GetConsensus(), tip);
-    //     LogPrint("stratum", "Updated the timestamp of block template by %d seconds\n", delta);
+    // size_t pos = 4 + 1 + 32 + 4 + 1 + ds[4+1+32+4] - (current_work.m_aux_hash2? 32: 0);
+    // if (ds.size() < pos) {
+    //     throw std::runtime_error("Customized coinbase transaction does not contain extranonce field at expected location.");
     // }
-    UpdateTime(&blkhdr, Params().GetConsensus(), tip);
-    params.push_back(HexInt4(blkhdr.nVersion));
-    params.push_back(HexInt4(blkhdr.nBits));
-    params.push_back(HexInt4(blkhdr.nTime));
-    params.push_back(UniValue((client.m_last_tip != tip)
-                           || (client.m_second_stage != bool(current_work.m_aux_hash2))));
-    client.m_last_tip = tip;
-    client.m_second_stage = bool(current_work.m_aux_hash2);
+
+    // std::string cb1 = HexStr(&ds[0], &ds[pos-4-8]);
+    // std::string cb2 = HexStr(&ds[pos], &ds[ds.size()]);
+
+    UniValue params(UniValue::VARR); // mining.notify params
+
+    // {"id": null, "method": "mining.notify", "params": ["JOB_ID", "VERSION", "PREVHASH", "MERKLEROOT", "RESERVED", "TIME", "BITS", CLEAN_JOBS]}\n
+    // {"id": null, "method": "mining.notify", "params": ["1", "04000000","71aeaa7dfb5c6cf5977832aebea1bf630a6d482b464610aa125ba6c358377e02","198ed0df3d53e5e57d2f333dd504ef949a7103b6bb311dd891b662c769e7f029","fbc2f4300c01f0b7820d00e3347c8da4ee614674376cbc45359daa54f9b5493e","0eaec560","0f0f0f20", true]}
+
+    params.push_back(HexStr(job_id.begin(), job_id.end())); // JOB_ID
+
+    /*
+        HexInt4(blkhdr.nVersion) = 00000004, so we can't use it here, will use swab conversion via 1 of 3 methods:
+
+        (1) params.push_back(HexStr((unsigned char *)&blkhdr.nVersion, (unsigned char *)&blkhdr.nVersion + sizeof(blkhdr.nVersion))); // VERSION
+        (2) std::vector<unsigned char> vnVersion(4, 0);
+            WriteLE64(&vnVersion[0], blkhdr.nVersion);
+            params.push_back(HexStr(vnVersion));
+        (3) params.push_back(HexInt4(bswap_32(blkhdr.nVersion)));
+    */
+
+    params.push_back(HexInt4(bswap_32(blkhdr.nVersion))); // VERSION
+    params.push_back(blkhdr.hashPrevBlock.GetHex());  // PREVHASH
+    params.push_back(blkhdr.hashMerkleRoot.GetHex()); // MERKLEROOT
+    params.push_back(blkhdr.hashFinalSaplingRoot.GetHex()); // RESERVED -> hashFinalSaplingRoot
+
+    // UpdateTime(&blkhdr, Params().GetConsensus(), tip);
+
+    params.push_back(HexInt4(blkhdr.nTime)); // TIME
+    params.push_back(HexInt4(blkhdr.nBits)); // BITS
+    // Clean Jobs. If true, miners should abort their current work and immediately use the new job. If false, they can still use the current job, but should move to the new one after exhausting the current nonce range.
+    params.push_back(true); // CLEAN_JOBS
+
+
+    // // For reasons of who-the-heck-knows-why, stratum byte-swaps each
+    // // 32-bit chunk of the hashPrevBlock.
+    // uint256 hashPrevBlock(blkhdr.hashPrevBlock);
+    // for (int i = 0; i < 256/32; ++i) {
+    //     ((uint32_t*)hashPrevBlock.begin())[i] = bswap_32(
+    //     ((uint32_t*)hashPrevBlock.begin())[i]);
+    // }
+    // params.push_back(HexStr(hashPrevBlock.begin(), hashPrevBlock.end()));
+    // params.push_back(cb1);
+    // params.push_back(cb2);
+
+    // UniValue branch(UniValue::VARR);
+    // for (const auto& hash : cb_branch) {
+    //     branch.push_back(HexStr(hash.begin(), hash.end()));
+    // }
+    // params.push_back(branch);
+
+    // // if (!current_work.m_aux_hash2) {
+    // //     int64_t delta = UpdateTime(&blkhdr, Params().GetConsensus(), tip);
+    // //     LogPrint("stratum", "Updated the timestamp of block template by %d seconds\n", delta);
+    // // }
+    // UpdateTime(&blkhdr, Params().GetConsensus(), tip);
+    // params.push_back(HexInt4(blkhdr.nVersion));
+    // params.push_back(HexInt4(blkhdr.nBits));
+    // params.push_back(HexInt4(blkhdr.nTime));
+    // params.push_back(UniValue((client.m_last_tip != tip)
+    //                        || (client.m_second_stage != bool(current_work.m_aux_hash2))));
+    // client.m_last_tip = tip;
+    // client.m_second_stage = bool(current_work.m_aux_hash2);
 
     UniValue mining_notify(UniValue::VOBJ);
-    mining_notify.push_back(Pair("params", params));
     mining_notify.push_back(Pair("id", client.m_nextid++));
     mining_notify.push_back(Pair("method", "mining.notify"));
+    mining_notify.push_back(Pair("params", params));
 
     return GetExtraNonceRequest(client, job_id)
-         + set_difficulty.write() + "\n"
+         + set_target.write() + "\n"
          + mining_notify.write()  + "\n";
 }
 
@@ -949,14 +1138,14 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
 
             std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
             // res = ProcessNewBlock(Params(), pblock, true, NULL);
-            CValidationState state; 
+            CValidationState state;
             res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
 
             if (res) {
                 LOCK(cs_main);
                 if (!mapBlockIndex.count(hash)) {
                     LogPrintf("Unable to find new block index entry; cannot prioritise block 0x%s\n", hash.ToString());
-                } else 
+                } else
                 {
                     CBlockIndex* block_index = mapBlockIndex.at(hash);
                     CValidationState state;
@@ -1046,31 +1235,79 @@ UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
         LogPrint("stratum", "Received subscription from client %s\n", client.m_client);
     }
 
-    // params[1] is the subscription ID for reconnect, which we
-    // currently do not support.
+    // According to 'Stratum protocol changes for ZCash' - https://github.com/slushpool/poclbm-zcash/wiki/Stratum-protocol-changes-for-ZCash
+    // mining.subscribe params looks like following:
+    // {"id": 1, "method": "mining.subscribe", "params": ["CONNECT_HOST", CONNECT_PORT, "MINER_USER_AGENT", "SESSION_ID"]}
+    // So, params[params.size()-1] should be SESSION_ID, but currently we don't support it.
 
-    UniValue msg(UniValue::VARR);
+    // Also we should answer with these:
+    // {"id": 1, "result": ["SESSION_ID", "NONCE_1"], "error": null}
+    // {"id":1,"result":[null,"81000001"],"error":null}
+
+    // NONCE_1 is first part of the block header nonce (in hex).
+
+    // By protocol, Zcash's nonce is 32 bytes long. The miner will pick NONCE_2 such that len(NONCE_2) = 32 - len(NONCE_1).
+    // Please note that Stratum use hex encoding, so you have to convert NONCE_1 from hex to binary before.
+
+    UniValue ret(UniValue::VARR);
+
+    // ExtraNonce1 -> client.m_supports_extranonce is false, so the job_id isn't used
+    std::vector<unsigned char> vExtraNonce1 = client.ExtraNonce1(uint256());
+
+    std::string sExtraNonce1 = HexStr(vExtraNonce1.begin(), vExtraNonce1.begin()
+        + (vExtraNonce1.size() > 3 ? 4 : vExtraNonce1.size()));
+
+    /**
+     * Potentially we can use something like strprintf("%08x", GetRand(std::numeric_limits<uint64_t>::max())
+     * here to generate sExtraNonce1, but don't forget that client.ExtraNonce1 method return 8 bytes
+     * job_nonce:8 = sha256(client.m_secret:32 + client.job_id:32) , so, somewhere in future we can re-calculate
+     * sExtraNonce1 for a given client based on m_secret.
+     */
+
+    if (fstdErrDebugOutput && vExtraNonce1.size() > 3) {
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, vExtraNonce1[0], vExtraNonce1[1], vExtraNonce1[2], vExtraNonce1[3], sExtraNonce1) << std::endl;
+        // recalc from client.m_secret example
+        uint256 sha256;
+        CSHA256().Write(client.m_secret.begin(), 32).Finalize(sha256.begin());
+        std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << HexStr(std::vector<unsigned char>(sha256.begin(), sha256.begin() + 4)) << std::endl;
+    }
+
+    ret.push_back(NullUniValue);
+    ret.push_back(sExtraNonce1);
+
+    // On mining.subscribe we don't need ti send anything else, we will send
+    // mining.set_target and mining.notify bit later, inside GetWorkUnit.
+    // Scheme is the following:
+    // 1. stratum_read_cb(bufferevent * bev, void * ctx)
+    // 2. if (client.m_send_work) -> GetWorkUnit
+    // 3. CustomizeWork (throw if error and exit from GetWorkUnit)
+    // 4. set_target
+    // 5. ...
+    // Last. GetWorkUnit returns string data (!) to send to client ( ... + mining.set_target + mining.notify + ... )
+
 
     // Some mining proxies (e.g. Nicehash) reject connections that don't send
     // a reasonable difficulty on first connection.  The actual value will be
     // overridden when the miner is authorized and work is delivered.  Oh, and
     // for reasons unknown it is sent in serialized float format rather than
     // as a numeric value...
-    UniValue set_difficulty(UniValue::VARR);
-    set_difficulty.push_back("mining.set_difficulty");
-    set_difficulty.push_back("1e+06"); // Will be overriden by later
-    msg.push_back(set_difficulty);     // work delivery messages.
 
-    UniValue notify(UniValue::VARR);
-    notify.push_back("mining.notify");
-    notify.push_back("ae6812eb4cd7735a302a8a9dd95cf71f");
-    msg.push_back(notify);
+    // UniValue msg(UniValue::VARR);
+    // UniValue set_difficulty(UniValue::VARR);
+    // set_difficulty.push_back("mining.set_difficulty");
+    // set_difficulty.push_back("1e+06"); // Will be overriden by later
+    // msg.push_back(set_difficulty);     // work delivery messages.
 
-    UniValue ret(UniValue::VARR);
-    ret.push_back(msg);
-    // client.m_supports_extranonce is false, so the job_id isn't used.
-    ret.push_back(HexStr(client.ExtraNonce1(uint256())));
-    ret.push_back(UniValue(4)); // sizeof(extranonce2)
+    // UniValue notify(UniValue::VARR);
+    // notify.push_back("mining.notify");
+    // notify.push_back("ae6812eb4cd7735a302a8a9dd95cf71f");
+    // msg.push_back(notify);
+
+    // UniValue ret(UniValue::VARR);
+    // ret.push_back(msg);
+    // // client.m_supports_extranonce is false, so the job_id isn't used.
+    // ret.push_back(HexStr(client.ExtraNonce1(uint256())));
+    // ret.push_back(UniValue(4)); // sizeof(extranonce2)
 
     return ret;
 }
@@ -1374,7 +1611,7 @@ UniValue stratum_mining_aux_subscribe(StratumClient& client, const UniValue& par
     // ret.push_back(HexStr(aux_pow_path.begin(), aux_pow_path.end()));
     // ret.push_back(UniValue((int)MAX_AUX_POW_COMMIT_BRANCH_LENGTH));
     // ret.push_back(UniValue((int)MAX_AUX_POW_BRANCH_LENGTH));
-    
+
     const std::string method("mining.aux.subscribe");
     BoundParams(method, params, 0, 0);
     client.m_supports_aux = false;
@@ -1518,7 +1755,7 @@ static void stratum_accept_conn_cb(evconnlistener *listener, evutil_socket_t fd,
     CService from;
     from.SetSockAddr(address);
     // Early address-based allow check
-    
+
     if (!ClientAllowed(stratum_allow_subnets, from)) {
         evconnlistener_free(listener);
         LogPrint("stratum", "Rejected connection from disallowed subnet: %s\n", from.ToString());

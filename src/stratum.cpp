@@ -1671,25 +1671,24 @@ UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
     // First parameter is the client username, which is ignored.
 
     /* EWBF 31 bytes job_id fix */
-    bool fFoundJob = false; uint256 ret;
+    bool fEWBFJobIDFixNeeded = false;
+    uint256 ret;
     if (params[1].isStr()) {
         //std::cerr << "\"" << params[1].get_str() << "\"" << std::endl;
-        std::string job_id_str = params[1].get_str();
+        const std::string job_id_str = params[1].get_str();
         const std::string hexDigits = "0123456789abcdef";
-        //std::cerr << strprintf("\"%s\" (%d)", job_id_str, job_id_str.length()) << std::endl;
+        // std::cerr << strprintf("\"%s\" (%d)", job_id_str, job_id_str.length()) << std::endl;
         if (job_id_str.length() == 63) {
-            for (int i = 0; i < 15; i++) {
-                std::vector<unsigned char> vch = ParseHex(params[1].get_str() + hexDigits[i]);
-                std::copy(vch.begin(), vch.end(), ret.begin());
-                fFoundJob = work_templates.count(ret);
-                //std::cerr << i << ": " << HexStr(ret) << " - " << fFoundJob << std::endl;
-                if (fFoundJob) break;
+            fEWBFJobIDFixNeeded = true;
+            for(const auto& hexDigit : hexDigits) {
+                ret = uint256(ParseHex(job_id_str + hexDigit));
+                if (work_templates.count(ret)) break;
             }
         }
     }
 
     uint256 job_id;
-    if (!fFoundJob)
+    if (!fEWBFJobIDFixNeeded)
         job_id = ParseUInt256(params[1], "job_id");
     else
         job_id = ret;
@@ -1882,9 +1881,9 @@ UniValue stratum_mining_extranonce_subscribe(StratumClient& client, const UniVal
     const std::string method("mining.extranonce.subscribe");
     BoundParams(method, params, 0, 0);
 
-    client.m_supports_extranonce = true;
+    client.m_supports_extranonce = false;
 
-    return true;
+    return false;
 }
 
 /** Callback to write from a stratum connection. */

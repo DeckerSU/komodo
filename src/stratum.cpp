@@ -1318,8 +1318,15 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
             // res = ProcessNewBlock(Params(), pblock, true, NULL);
             CValidationState state;
-            // res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
-            res = ProcessNewBlock(1,current_work.nHeight,state, NULL, &block, true /* forceProcessing */ , NULL);
+
+            if(fstdErrDebugOutput) {
+                CBlockIndex index {blkhdr};
+                index.SetHeight(-1);
+                std::cerr << "block = " << blockToJSON(block, &index, true).write(1) << std::endl;
+            }
+
+            res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
+
             if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[2] = " << res << std::endl;
 
             if (res) {
@@ -2164,7 +2171,7 @@ void SendKeepAlivePackets()
         // Run the notifier on an integer second in the steady clock.
         auto now = std::chrono::steady_clock::now().time_since_epoch();
         auto nextFire = std::chrono::duration_cast<std::chrono::seconds>(
-            now + std::chrono::seconds(1));
+            now + std::chrono::seconds(10));
         std::this_thread::sleep_until(
         std::chrono::time_point<std::chrono::steady_clock>(nextFire));
 

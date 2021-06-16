@@ -662,13 +662,13 @@ void CustomizeWork(const StratumClient& client, const StratumWork& current_work,
     }
 
     std::vector<unsigned char> nonce(extranonce1);
+
     if ((nonce.size() + extranonce2.size()) != 32) {
         const std::string msg = strprintf("%s: unexpected combined nonce length: extranonce1(%d) + extranonce2(%d) != 32; unable to submit work", __func__, nonce.size(), extranonce2.size());
         LogPrint("stratum", "%s\n", msg);
         throw std::runtime_error(msg);
     }
-    nonce.insert(nonce.end(), extranonce2.begin(),
-                              extranonce2.end());
+    nonce.insert(nonce.end(), extranonce2.begin(), extranonce2.end());
 
     // nonce = extranonce1 + extranonce2
     // if (fstdErrDebugOutput) {
@@ -1892,7 +1892,10 @@ UniValue stratum_mining_extranonce_subscribe(StratumClient& client, const UniVal
     const std::string method("mining.extranonce.subscribe");
     BoundParams(method, params, 0, 0);
 
-    client.m_supports_extranonce = true;
+    /*client.m_supports_extranonce = true;
+
+    return true;*/
+    client.m_supports_extranonce = false;
 
     return true;
 }

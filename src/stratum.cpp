@@ -1323,6 +1323,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
                 CBlockIndex index {blkhdr};
                 index.SetHeight(-1);
                 std::cerr << "block = " << blockToJSON(block, &index, true).write(1) << std::endl;
+                std::cerr << "CheckEquihashSolution = " << CheckEquihashSolution(&block, Params()) << std::endl;
             }
 
             res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);

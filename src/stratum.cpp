@@ -249,7 +249,13 @@ namespace { // better to use anonymous namespace for helper routines
         return ss.str();
     }
 
-
+    std::string get_stripped_username(const std::string& username) {
+        std::string res(username);
+        size_t dotpos = username.find('.');
+        if (dotpos != std::string::npos)
+            res.resize(dotpos);
+        return res;
+    }
 }
 
 namespace ccminer {
@@ -1544,7 +1550,7 @@ UniValue stratum_mining_authorize(StratumClient& client, const UniValue& params)
         boost::trim_right(username);
     }
 
-    CBitcoinAddress addr(username);
+    CBitcoinAddress addr(get_stripped_username(username));
 
     if (!addr.IsValid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid Komodo address: %s", username));
@@ -1611,7 +1617,8 @@ UniValue stratum_mining_aux_deauthorize(StratumClient& client, const UniValue& p
         boost::trim_right(username);
     }
 
-    CBitcoinAddress addr(username);
+    CBitcoinAddress addr(get_stripped_username(username));
+
     if (!addr.IsValid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid Komodo address: %s", username));
     }

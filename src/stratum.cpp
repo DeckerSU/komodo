@@ -2203,6 +2203,9 @@ void SendKeepAlivePackets()
             evbuffer *output = bufferevent_get_output(bev);
             if (!output)
                 continue;
+            evbuffer *input = bufferevent_get_input(bev);
+            if (!input)
+                continue;
 
             StratumClient& client = subscription.second;
 
@@ -2237,8 +2240,7 @@ void SendKeepAlivePackets()
 
             if ( (client.m_last_tip && client.m_last_tip->GetHeight() == chainActive.Tip()->GetHeight()) || (!client.m_last_tip) )
             {
-                // trying force send work for "stucked" client
-                client.m_send_work = true;
+                std::cerr << "\033[31m" << client.m_from.ToString() << "\033[0m seems stucked (ccminer issue), need to emulate new block incoming to unstuck!" << std::endl;
             }
         }
 

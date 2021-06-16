@@ -819,6 +819,7 @@ std::string GetWorkUnit(StratumClient& client)
         job_id = new_work->block.GetHash();
         //work_templates[job_id] = StratumWork(*new_work, new_work->block.vtx[0]->HasWitness());
         work_templates[job_id] = StratumWork(*new_work, false);
+
         tip = tip_new;
 
         transactions_updated_last = mempool.GetTransactionsUpdated();
@@ -941,9 +942,9 @@ std::string GetWorkUnit(StratumClient& client)
         static const std::vector<unsigned char> dummy(32-extranonce1.size(), 0x00); // extranonce2
         CustomizeWork(client, current_work, client.m_addr, extranonce1, dummy, cb, bf, cb_branch);
 
-        current_work.GetBlock().vtx[0] = cb;
-        current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
-        current_work.nHeight = tip->GetHeight() + 1;
+        // current_work.GetBlock().vtx[0] = cb;
+        // current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
+        // current_work.nHeight = tip->GetHeight() + 1;
 
     }
 
@@ -1094,7 +1095,9 @@ std::string GetWorkUnit(StratumClient& client)
  * @return true
  * @return false
  */
-bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork& current_work, const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2, boost::optional<uint32_t> nVersion, uint32_t nTime, const std::vector<unsigned char>& sol)
+bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork& current_work,
+                 const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2,
+                 boost::optional<uint32_t> nVersion, uint32_t nTime, const std::vector<unsigned char>& sol)
 {
 
     // if (fstdErrDebugOutput && extranonce1.size() > 3) {
@@ -1258,10 +1261,18 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
 
         {
             // LOCK(cs_main);
-            uint8_t pubkey33[33];
-            int32_t height = current_work.nHeight;
-            res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
-            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "CheckProofOfWork = " << res << std::endl;
+            arith_uint256 bnTarget; bool fNegative, fOverflow;
+            bnTarget.SetCompact(blkhdr.nBits, &fNegative, &fOverflow);
+            // check range
+            // if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
+            //     return false;
+            if (UintToArith256(blkhdr.GetHash()) > bnTarget) {
+                res = false;
+            } else {
+                uint8_t pubkey33[33]; int32_t height = current_work.nHeight;
+                res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
+            }
+            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[1] = " << res << std::endl;
         }
 
         uint256 hash = blkhdr.GetHash();
@@ -1309,6 +1320,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             CValidationState state;
             // res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
             res = ProcessNewBlock(1,current_work.nHeight,state, NULL, &block, true /* forceProcessing */ , NULL);
+            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[2] = " << res << std::endl;
 
             if (res) {
                 // LOCK(cs_main);

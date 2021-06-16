@@ -942,8 +942,13 @@ std::string GetWorkUnit(StratumClient& client)
         static const std::vector<unsigned char> dummy(32-extranonce1.size(), 0x00); // extranonce2
         CustomizeWork(client, current_work, client.m_addr, extranonce1, dummy, cb, bf, cb_branch);
 
-        // current_work.GetBlock().vtx[0] = cb;
-        // current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
+        // without 2 lines below equihash solutinon on SubmitWork will be incorrect, bcz we should
+        // change vtx[0] in current work and re-calc hashMerkleRoot
+        // TODO: refactor all of these ... may be change this in current_work directly is bad idea,
+        // and we should do all checks and hashMerkleRoot at SubmitBlock(...)
+        current_work.GetBlock().vtx[0] = cb;
+        current_work.GetBlock().hashMerkleRoot = current_work.GetBlock().BuildMerkleTree();
+
         // current_work.nHeight = tip->GetHeight() + 1;
 
     }

@@ -608,7 +608,7 @@ static std::string GetExtraNonceRequest(StratumClient& client, const uint256& jo
             +         "\"";
         const std::string k_extranonce_req3 = std::string()
             +            "\"," // extranonce1
-            +         "4"      // extranonce2.size()
+            +         "4"      // extranonce2.size() // TODO: should be 32 - extranonce1.size()
             +     "]"
             + "}"
             + "\n";
@@ -937,9 +937,9 @@ std::string GetWorkUnit(StratumClient& client)
     {
         // TODO: make ExtraNonce1 return 4 bytes values, instead of 8
         std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
-        if (!client.m_supports_extranonce) {
-            extranonce1.resize(4);
-        }
+        //if (!client.m_supports_extranonce) {
+            //extranonce1.resize(4);
+        //}
 
 
         static const std::vector<unsigned char> dummy(32-extranonce1.size(), 0x00); // extranonce2
@@ -1114,13 +1114,8 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " extranonce1.size() = "  << extranonce1.size() << std::endl;
     // }
 
-    if (extranonce1.size() != 4) {
-        std::string msg = strprintf("extranonce1 is wrong length (received %d bytes; expected %d bytes", extranonce1.size(), 4);
-        LogPrint("stratum", "%s\n", msg);
-        throw JSONRPCError(RPC_INVALID_PARAMETER, msg);
-    }
-    if (extranonce2.size() != 28) {
-        std::string msg = strprintf("%s: extranonce2 is wrong length (received %d bytes; expected %d bytes", __func__, extranonce2.size(), 28);
+    if (extranonce1.size() + extranonce2.size() != 32) {
+        std::string msg = strprintf("extranonce1 [%d] length + extranonce2 [%d] length != %d", extranonce1.size(), extranonce2.size(), 32);
         LogPrint("stratum", "%s\n", msg);
         throw JSONRPCError(RPC_INVALID_PARAMETER, msg);
     }
@@ -1456,8 +1451,8 @@ UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
     // ExtraNonce1 -> client.m_supports_extranonce is false, so the job_id isn't used
     std::vector<unsigned char> vExtraNonce1 = client.ExtraNonce1(uint256());
 
-    std::string sExtraNonce1 = HexStr(vExtraNonce1.begin(), vExtraNonce1.begin()
-        + (vExtraNonce1.size() > 3 ? 4 : vExtraNonce1.size()));
+    // std::string sExtraNonce1 = HexStr(vExtraNonce1.begin(), vExtraNonce1.begin() + (vExtraNonce1.size() > 3 ? 4 : vExtraNonce1.size()));
+    std::string sExtraNonce1 = HexStr(vExtraNonce1);
 
     /**
      * Potentially we can use something like strprintf("%08x", GetRand(std::numeric_limits<uint64_t>::max())
@@ -1706,24 +1701,21 @@ UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
 
     uint32_t nTime = bswap_32(ParseHexInt4(params[2], "nTime"));
 
-    std::vector<unsigned char> extranonce2 = ParseHexV(params[3], "extranonce2");
-    if (extranonce2.size() != 32 - 4) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("extranonce2 is wrong length (received %d bytes; expected %d bytes", extranonce2.size(), 32 - 4));
-    }
-
     std::vector<unsigned char> sol = ParseHexV(params[4], "solution");
     if (sol.size() != 1347) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("extranonce2 is wrong length (received %d bytes; expected %d bytes", sol.size(), 1347));
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("solution is wrong length (received %d bytes; expected %d bytes", sol.size(), 1347));
     }
 
     std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
+    std::vector<unsigned char> extranonce2 = ParseHexV(params[3], "extranonce2");
+
     // client.ExtraNonce1( return 8 bytes, but we need only 4,
 
     // p.s. what if client.m_supports_extranonce ? which extranonce1 client assuming?
     // 4 bytes which it received after mining.subscribe or 8 bytes received
     // with mining.set_extranonce (?)
 
-    extranonce1.resize(4);
+    // extranonce1.resize(4);
 
     boost::optional<uint32_t> nVersion = 4; // block version always 4
 

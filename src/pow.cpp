@@ -890,7 +890,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
             //if ( 0 && height > 792000 )
             if ( Params().NetworkIDString() != "regtest" )
             {
-                for (i=31; i>=0; i--)
+                /*for (i=31; i>=0; i--)
                     fprintf(stderr,"%02x",((uint8_t *)&hash)[i]);
                 fprintf(stderr," hash vs ");
                 for (i=31; i>=0; i--)
@@ -901,7 +901,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
                 fprintf(stderr," <- pubkey\n");
                 for (i=0; i<33; i++)
                     fprintf(stderr,"%02x",origpubkey33[i]);
-                fprintf(stderr," <- origpubkey\n");
+                fprintf(stderr," <- origpubkey\n");*/
             }
             return false;
         }

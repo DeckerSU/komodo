@@ -3,6 +3,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/* Stratum protocol:
+    - https://en.bitcoin.it/wiki/Stratum_mining_protocol - Stratum mining protocol
+    - https://github.com/slushpool/poclbm-zcash/wiki/Stratum-protocol-changes-for-ZCash - Stratum protocol changes for ZCash
+*/
+
 #include "stratum.h"
 
 #include "base58.h"
@@ -596,8 +601,14 @@ static double ClampDifficulty(const StratumClient& client, double diff)
 
 static std::string GetExtraNonceRequest(StratumClient& client, const uint256& job_id)
 {
+    // https://en.bitcoin.it/wiki/Stratum_mining_protocol#mining.set_extranonce
+    // mining.set_extranonce("extranonce1", extranonce2_size)
+
     std::string ret;
-    if (client.m_supports_extranonce) {
+    if (client.m_supports_extranonce)
+    {
+        std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
+
         const std::string k_extranonce_req = std::string()
             + "{"
             +     "\"id\":";
@@ -607,8 +618,8 @@ static std::string GetExtraNonceRequest(StratumClient& client, const uint256& jo
             +     "\"params\":["
             +         "\"";
         const std::string k_extranonce_req3 = std::string()
-            +            "\"," // extranonce1
-            +         "4"      // extranonce2.size() // TODO: should be 32 - extranonce1.size()
+            +            "\","                                 // extranonce1
+            +         strprintf("%d", 32 - extranonce1.size()) // extranonce2.size() = 32 - extranonce1.size()
             +     "]"
             + "}"
             + "\n";
@@ -616,7 +627,7 @@ static std::string GetExtraNonceRequest(StratumClient& client, const uint256& jo
         ret = k_extranonce_req
             + strprintf("%d", client.m_nextid++)
             + k_extranonce_req2
-            + HexStr(client.ExtraNonce1(job_id))
+            + HexStr(extranonce1)
             + k_extranonce_req3;
     }
     return ret;

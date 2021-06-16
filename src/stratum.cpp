@@ -530,6 +530,7 @@ struct StratumWork {
     bool m_is_witness_enabled;
 
     int32_t nHeight;
+    std::string local_diff;
 
     // The cached 2nd-stage auxiliary hash value, if an auxiliary proof-of-work
     // solution has been found.
@@ -996,11 +997,12 @@ std::string GetWorkUnit(StratumClient& client)
 
         */
 
-        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000")); // 1.0
+        arith_uint256 aHashTarget = UintToArith256(uint256S("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f")); // 1.0
         // aHashTarget = aHashTarget / 8704; // komodo_diff = 131074 (NiceHash), ccminer_diff = 8704 (Yiimp)
         hashTarget = aHashTarget;
 
         strTarget = hashTarget.GetHex();
+        current_work.local_diff = strTarget;
 
         if (fstdErrDebugOutput) {
 
@@ -1305,9 +1307,12 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         double kmd_target_diff = GetDifficulty(&tmp_index); // diff from nbits (target)
         tmp_index.nBits = UintToArith256(hash).GetCompact();
         double kmd_real_diff = GetDifficulty(&tmp_index); // real diff (from hash)
+        tmp_index.nBits = arith_uint256(current_work.local_diff).GetCompact();
+        double kmd_local_diff = GetDifficulty(&tmp_index); // local diff (from local port diff)
 
         double ccminer_real_diff = ccminer::equi_stratum_target_to_diff(hash.ToString());
         double ccminer_target_diff = ccminer::equi_stratum_target_to_diff(arith_uint256().SetCompact(blkhdr.nBits).ToString());
+        double ccminer_local_diff = ccminer::equi_stratum_target_to_diff(current_work.local_diff);
 
         // struct timeval tv_start, tv_end, diff;
 	    // double secs, solps;
@@ -1337,11 +1342,22 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             // std::cerr << strprintf("%f ms - %" PRIu64 "", elapsed.count(), shares_accepted_since_last) << std::endl;
         }
 
+        bool fDisplayDiffKMD = true; // otherwise it will display ccminer diff
+
         std::cerr << DateTimeStrPrecise() <<
-                     strprintf("%saccepted: %" PRIu64 "/%" PRIu64 " ", ColorTypeNames[cl_WHT], counter_TotalBlocks, counter_TotalShares ) <<
-                     // strprintf("(diff %g, target %g) %s ", kmd_real_diff, kmd_target_diff, ColorTypeNames[cl_N]) << // komodod_diff
-                     // strprintf("(diff %s, target %s) %s ", ccminer_real_diff, ccminer_target_diff, ColorTypeNames[cl_N]) << // ccminer diff
-                     strprintf("(diff %.3f, target %.3f) %s", ccminer_real_diff, ccminer_target_diff, ColorTypeNames[cl_N]) << // ccminer diff
+                     strprintf("%saccepted: %" PRIu64 "/%" PRIu64 "%s ", ColorTypeNames[cl_WHT], counter_TotalBlocks, counter_TotalShares, ColorTypeNames[cl_N] );
+        if (fDisplayDiffKMD) {
+            /* komodod diff display */
+            std::cerr << strprintf("%slocal %g%s ", "\x1B[90m", kmd_local_diff, ColorTypeNames[cl_N]) <<
+                         strprintf("(diff %g, target %g) %s ", kmd_real_diff, kmd_target_diff, ColorTypeNames[cl_N]);
+        } 
+        else 
+        {   /* ccminer diff display */
+            std::cerr << strprintf("%slocal %.3f%s ", "\x1B[90m", ccminer_local_diff, ColorTypeNames[cl_N]) << 
+                         strprintf("%s(diff %.3f, target %.3f) %s", ColorTypeNames[cl_WHT], ccminer_real_diff, ccminer_target_diff, ColorTypeNames[cl_N]); // ccminer diff
+        }
+
+        std::cerr << "" <<                     
                      strprintf("%f ms ", elapsed.count()) << // 1 share took elapsed ms
                      strprintf("%s%s%s ", ColorTypeNames[cl_LGR], (res ? "yay!!!": "yes!"), ColorTypeNames[cl_N]) <<
         std::endl;

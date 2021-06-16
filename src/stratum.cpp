@@ -3,10 +3,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-/* Stratum protocol:
-    - https://en.bitcoin.it/wiki/Stratum_mining_protocol - Stratum mining protocol
-    - https://github.com/slushpool/poclbm-zcash/wiki/Stratum-protocol-changes-for-ZCash - Stratum protocol changes for ZCash
-*/
+/**
+ * @file stratum.cpp
+ * @author Decker
+ * @brief Equihash Stratum implementation for Komodo (KMD) daemon
+ * @version 0.1
+ * @date 2021-06-16
+ *
+ * @copyright Copyright (c) 2021
+ *
+ */
+
+// Stratum protocol:
+//   - https://en.bitcoin.it/wiki/Stratum_mining_protocol - Stratum mining protocol
+//   - https://github.com/slushpool/poclbm-zcash/wiki/Stratum-protocol-changes-for-ZCash - Stratum protocol changes for ZCash
 
 #include "stratum.h"
 

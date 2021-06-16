@@ -999,12 +999,8 @@ std::string GetWorkUnit(StratumClient& client)
     // std::string cb1 = HexStr(&ds[0], &ds[pos-4-8]);
     // std::string cb2 = HexStr(&ds[pos], &ds[ds.size()]);
 
-    UniValue params(UniValue::VARR); // mining.notify params
-
     // {"id": null, "method": "mining.notify", "params": ["JOB_ID", "VERSION", "PREVHASH", "MERKLEROOT", "RESERVED", "TIME", "BITS", CLEAN_JOBS]}\n
     // {"id": null, "method": "mining.notify", "params": ["1", "04000000","71aeaa7dfb5c6cf5977832aebea1bf630a6d482b464610aa125ba6c358377e02","198ed0df3d53e5e57d2f333dd504ef949a7103b6bb311dd891b662c769e7f029","fbc2f4300c01f0b7820d00e3347c8da4ee614674376cbc45359daa54f9b5493e","0eaec560","0f0f0f20", true]}
-
-    params.push_back(HexStr(job_id.begin(), job_id.end())); // JOB_ID
 
     /*
         HexInt4(blkhdr.nVersion) = 00000004, so we can't use it here, will use swab conversion via 1 of 3 methods:
@@ -1023,19 +1019,22 @@ std::string GetWorkUnit(StratumClient& client)
             [ ---- ] 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb - blkhdr.hashFinalSaplingRoot.ToString()
     */
 
-
+    /* mining.notify params */
+    UniValue params(UniValue::VARR); // mining.notify params
+    params.push_back(HexStr(job_id.begin(), job_id.end())); // JOB_ID
     params.push_back(HexInt4(bswap_32(blkhdr.nVersion))); // VERSION (0x4 -> "04000000")
     params.push_back(HexStr(blkhdr.hashPrevBlock));  // PREVHASH
     params.push_back(HexStr(blkhdr.hashMerkleRoot)); // MERKLEROOT
     params.push_back(HexStr(blkhdr.hashFinalSaplingRoot)); // RESERVED -> hashFinalSaplingRoot
 
-    // UpdateTime(&blkhdr, Params().GetConsensus(), tip);
+    UpdateTime(&blkhdr, Params().GetConsensus(), tip /* or pindexPrev [tip-1] is needed? */);
 
     params.push_back(HexInt4(bswap_32(blkhdr.nTime))); // TIME
     params.push_back(HexInt4(bswap_32(blkhdr.nBits))); // BITS
     // Clean Jobs. If true, miners should abort their current work and immediately use the new job. If false, they can still use the current job, but should move to the new one after exhausting the current nonce range.
+
     UniValue clean_jobs(UniValue::VBOOL);
-    clean_jobs = true;
+    clean_jobs = client.m_last_tip != tip; // true
     params.push_back(clean_jobs); // CLEAN_JOBS
 
 
@@ -2172,6 +2171,7 @@ void SendKeepAlivePackets()
                 (client.m_last_tip ? strprintf("client.m_last_tip->GetHeight() = %d", client.m_last_tip->GetHeight()) : "") << std::endl <<
                 "chainActive.Tip()->GetHeight() = " << chainActive.Tip()->GetHeight() << std::endl <<
                 "client.m_supports_extranonce = " << client.m_supports_extranonce << std::endl <<
+                "client.m_send_work = " << client.m_send_work << std::endl <<
                 std::endl;
 
                 // "client.m_last_tip.GetHeight() = " << client.m_last_tip->GetHeight() <<
@@ -2184,12 +2184,18 @@ void SendKeepAlivePackets()
 
             std::string data = "\r\n"; // JSONRPCReply(NullUniValue, NullUniValue, NullUniValue);
             // to see the socket / connection is alive, we will see bunch of
-            // [2021-06-16 03:01:31] JSON decode failed(1): '[' or '{' expected near end of file
+            // JSON decode failed(1): '[' or '{' expected near end of file
             // on client if will send "\r\n" every second
 
             assert(output);
             if (evbuffer_add(output, data.data(), data.size())) {
                 LogPrint("stratum", "Sending stratum keepalive unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
+            }
+
+            if ( (client.m_last_tip && client.m_last_tip->GetHeight() == chainActive.Tip()->GetHeight()) || (!client.m_last_tip) )
+            {
+                // trying force send work for "stucked" client
+                client.m_send_work = true;
             }
         }
 

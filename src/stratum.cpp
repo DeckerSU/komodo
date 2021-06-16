@@ -899,7 +899,7 @@ std::string GetWorkUnit(StratumClient& client)
 
         */
 
-        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000 ")); // 1.0
+        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000")); // 1.0
         // aHashTarget = aHashTarget / 8704; // komodo_diff = 131074 (NiceHash), ccminer_diff = 8704 (Yiimp)
         hashTarget = aHashTarget;
 
@@ -937,7 +937,10 @@ std::string GetWorkUnit(StratumClient& client)
     {
         // TODO: make ExtraNonce1 return 4 bytes values, instead of 8
         std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
-        extranonce1.resize(4);
+        if (!client.m_supports_extranonce) {
+            extranonce1.resize(4);
+        }
+
 
         static const std::vector<unsigned char> dummy(32-extranonce1.size(), 0x00); // extranonce2
         CustomizeWork(client, current_work, client.m_addr, extranonce1, dummy, cb, bf, cb_branch);
@@ -1714,7 +1717,12 @@ UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
     }
 
     std::vector<unsigned char> extranonce1 = client.ExtraNonce1(job_id);
-    // client.ExtraNonce1( return 8 bytes, but we need only 4
+    // client.ExtraNonce1( return 8 bytes, but we need only 4,
+
+    // p.s. what if client.m_supports_extranonce ? which extranonce1 client assuming?
+    // 4 bytes which it received after mining.subscribe or 8 bytes received
+    // with mining.set_extranonce (?)
+
     extranonce1.resize(4);
 
     boost::optional<uint32_t> nVersion = 4; // block version always 4
@@ -1881,9 +1889,9 @@ UniValue stratum_mining_extranonce_subscribe(StratumClient& client, const UniVal
     const std::string method("mining.extranonce.subscribe");
     BoundParams(method, params, 0, 0);
 
-    client.m_supports_extranonce = false;
+    client.m_supports_extranonce = true;
 
-    return false;
+    return true;
 }
 
 /** Callback to write from a stratum connection. */

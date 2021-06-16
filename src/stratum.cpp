@@ -59,6 +59,9 @@
 #include <locale>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#include <chrono>
+#include <thread>
+
 extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // rpc/blockchain.cpp
 bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_read.cpp
@@ -895,7 +898,7 @@ std::string GetWorkUnit(StratumClient& client)
 
         */
 
-        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000")); // 1.0
+        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000 ")); // 1.0
         // aHashTarget = aHashTarget / 8704; // komodo_diff = 131074 (NiceHash), ccminer_diff = 8704 (Yiimp)
         hashTarget = aHashTarget;
 
@@ -1634,7 +1637,31 @@ UniValue stratum_mining_submit(StratumClient& client, const UniValue& params)
     BoundParams(method, params, 5,5);
     // First parameter is the client username, which is ignored.
 
-    uint256 job_id = ParseUInt256(params[1], "job_id");
+    /* EWBF 31 bytes job_id fix */
+    bool fFoundJob = false; uint256 ret;
+    if (params[1].isStr()) {
+        //std::cerr << "\"" << params[1].get_str() << "\"" << std::endl;
+        std::string job_id_str = params[1].get_str();
+        const std::string hexDigits = "0123456789abcdef";
+        //std::cerr << strprintf("\"%s\" (%d)", job_id_str, job_id_str.length()) << std::endl;
+        if (job_id_str.length() == 63) {
+            for (int i = 0; i < 15; i++) {
+                std::vector<unsigned char> vch = ParseHex(params[1].get_str() + hexDigits[i]);
+                std::copy(vch.begin(), vch.end(), ret.begin());
+                fFoundJob = work_templates.count(ret);
+                //std::cerr << i << ": " << HexStr(ret) << " - " << fFoundJob << std::endl;
+                if (fFoundJob) break;
+            }
+        }
+    }
+
+    uint256 job_id;
+    if (!fFoundJob)
+        job_id = ParseUInt256(params[1], "job_id");
+    else
+        job_id = ret;
+
+    // uint256 job_id = ParseUInt256(params[1], "job_id");
     if (!work_templates.count(job_id)) {
         LogPrint("stratum", "Received completed share for unknown job_id : %s\n", HexStr(job_id.begin(), job_id.end()));
         return false;
@@ -2085,6 +2112,9 @@ void BlockWatcher()
             if (client.m_last_tip == chainActive.Tip()) {
                 continue;
             }
+
+            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << DateTimeStrPrecise() << std::endl;
+
             // Get new work
             std::string data;
             try {
@@ -2098,7 +2128,6 @@ void BlockWatcher()
                 data = JSONRPCReply(NullUniValue, JSONRPCError(RPC_INTERNAL_ERROR, msg), NullUniValue);
             }
             // Send the new work to the client
-            LogPrint("stratum", "Sending updated stratum work unit to %s : %s", client.GetPeer().ToString(), data);
 
             assert(output);
             if (evbuffer_add(output, data.data(), data.size())) {
@@ -2106,6 +2135,72 @@ void BlockWatcher()
             }
         }
     }
+}
+
+void SendKeepAlivePackets()
+{
+    RenameThread("sockklv");
+    while (true) {
+        // Run the notifier on an integer second in the steady clock.
+        auto now = std::chrono::steady_clock::now().time_since_epoch();
+        auto nextFire = std::chrono::duration_cast<std::chrono::seconds>(
+            now + std::chrono::seconds(1));
+        std::this_thread::sleep_until(
+        std::chrono::time_point<std::chrono::steady_clock>(nextFire));
+
+        boost::this_thread::interruption_point();
+
+        // Either new block, or updated transactions.  Either way,
+        // send updated work to miners.
+        for (auto& subscription : subscriptions) {
+            bufferevent* bev = subscription.first;
+
+            if (!bev)
+                continue;
+            evbuffer *output = bufferevent_get_output(bev);
+            if (!output)
+                continue;
+
+            StratumClient& client = subscription.second;
+
+            if (fstdErrDebugOutput) {
+                std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ <<
+                "client.m_authorized = " << client.m_authorized << std::endl <<
+                "client.m_aux_addr.size() = " << client.m_aux_addr.size() << std::endl <<
+                "client.m_last_tip = " << strprintf("%p", client.m_last_tip) << std::endl <<
+                "chainActive.Tip()->GetHeight() = " << chainActive.Tip()->GetHeight() << std::endl <<
+                std::endl;
+
+                // "client.m_last_tip.GetHeight() = " << client.m_last_tip->GetHeight() <<
+            }
+
+            // Ignore clients that aren't authorized yet.
+            if (!client.m_authorized && client.m_aux_addr.empty()) {
+                continue;
+            }
+            // Ignore clients that are already working on the new block.
+            // Typically this is just the miner that found the block, who was
+            // immediately sent a work update.  This check avoids sending that
+            // work notification again, moments later.  Due to race conditions
+            // there could be more than one miner that have already received an
+            // update, however.
+            if (client.m_last_tip == chainActive.Tip()) {
+                continue;
+            }
+
+            std::string data = JSONRPCReply(NullUniValue, NullUniValue, NullUniValue);
+            // to see the socket / connection is alive, we will see bunch of
+            // [2021-06-16 03:01:31] JSON decode failed(1): '[' or '{' expected near end of file
+            // on client if will send "\r\n" every second
+
+            assert(output);
+            if (evbuffer_add(output, data.data(), data.size())) {
+                LogPrint("stratum", "Sending stratum keepalive unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
+            }
+        }
+
+    }
+
 }
 
 /** Configure the stratum server */
@@ -2153,6 +2248,7 @@ bool InitStratumServer()
     // Start thread to wait for block notifications and send updated
     // work to miners.
     block_watcher_thread = boost::thread(BlockWatcher);
+    block_watcher_thread = boost::thread(SendKeepAlivePackets);
 
     return true;
 }

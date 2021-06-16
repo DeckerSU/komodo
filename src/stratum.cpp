@@ -2159,7 +2159,7 @@ void BlockWatcher()
                 continue;
             }
 
-            std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << DateTimeStrPrecise() << std::endl;
+            std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
 
             // Get new work
             std::string data;
@@ -2243,7 +2243,11 @@ void SendKeepAlivePackets()
 
             if ( (client.m_last_tip && client.m_last_tip->GetHeight() == chainActive.Tip()->GetHeight()) || (!client.m_last_tip) )
             {
-                std::cerr << "\033[31m" << client.m_from.ToString() << "\033[0m seems stucked (ccminer issue), need to emulate new block incoming to unstuck!" << std::endl;
+                LOCK(cs_stratum);
+                std::cerr << DateTimeStrPrecise() << "\033[31m" << client.m_from.ToString() << "\033[0m seems stucked (ccminer issue), need to emulate new block incoming to unstuck!" << std::endl;
+                mempool.AddTransactionsUpdated(1);
+                client.m_last_tip = (client.m_last_tip ? nullptr : chainActive.Tip());
+                client.m_nextid++;
             }
         }
 

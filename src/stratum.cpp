@@ -77,6 +77,10 @@
 #include <chrono>
 #include <thread>
 
+// https://en.cppreference.com/w/cpp/types/integer - cinttypes for format constants, like PRId64, etc.
+#include <cinttypes>
+
+
 extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // rpc/blockchain.cpp
 bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_read.cpp
@@ -266,6 +270,46 @@ namespace { // better to use anonymous namespace for helper routines
             res.resize(dotpos);
         return res;
     }
+
+    // C++11 map initialization
+    const std::map<std::string,std::string> mapColors = {
+        { "cl_N",  "\x1B[0m"  },
+        { "cl_RED",  "\x1B[31m" },
+        { "cl_GRN",  "\x1B[32m" },
+        { "cl_YLW",  "\x1B[33m" },
+        { "cl_BLU",  "\x1B[34m" },
+        { "cl_MAG",  "\x1B[35m" },
+        { "cl_CYN",  "\x1B[36m" },
+        { "cl_BLK",  "\x1B[22;30m" }, /* black */
+        { "cl_RD2",  "\x1B[22;31m" }, /* red */
+        { "cl_GR2",  "\x1B[22;32m" }, /* green */
+        { "cl_YL2",  "\x1B[22;33m" }, /* dark yellow */
+        { "cl_BL2",  "\x1B[22;34m" }, /* blue */
+        { "cl_MA2",  "\x1B[22;35m" }, /* magenta */
+        { "cl_CY2",  "\x1B[22;36m" }, /* cyan */
+        { "cl_SIL",  "\x1B[22;37m" }, /* gray */
+        { "cl_LRD",  "\x1B[01;31m" }, /* light red */
+        { "cl_LGR",  "\x1B[01;32m" }, /* light green */
+        { "cl_LYL",  "\x1B[01;33m" }, /* tooltips */
+        { "cl_LBL",  "\x1B[01;34m" }, /* light blue */
+        { "cl_LMA",  "\x1B[01;35m" }, /* light magenta */
+        { "cl_LCY",  "\x1B[01;36m" }, /* light cyan */
+        { "cl_WHT",  "\x1B[01;37m" }, /* white */
+    };
+
+    enum ColorType
+    {
+        cl_N, cl_RED, cl_GRN, cl_YLW, cl_BLU, cl_MAG, cl_CYN, cl_BLK, cl_RD2, cl_GR2, cl_YL2, cl_BL2, cl_MA2, cl_CY2, cl_SIL, cl_LRD, cl_LGR, cl_LYL, cl_LBL, cl_LMA, cl_LCY, cl_WHT
+    };
+
+    char const* ColorTypeNames[]=
+    {
+        "\x1B[0m"    , "\x1B[31m"   , "\x1B[32m"   , "\x1B[33m"   , "\x1B[34m"   ,
+        "\x1B[35m"   , "\x1B[36m"   , "\x1B[22;30m", "\x1B[22;31m", "\x1B[22;32m",
+        "\x1B[22;33m", "\x1B[22;34m", "\x1B[22;35m", "\x1B[22;36m", "\x1B[22;37m",
+        "\x1B[01;31m", "\x1B[01;32m", "\x1B[01;33m", "\x1B[01;34m", "\x1B[01;35m",
+        "\x1B[01;36m", "\x1B[01;37m"
+    };
 }
 
 namespace ccminer {
@@ -384,6 +428,32 @@ namespace ccminer {
         return d;
     }
 
+    /* Subtract the `struct timeval' values X and Y,
+       storing the result in RESULT.
+       Return 1 if the difference is negative, otherwise 0.  */
+    int timeval_subtract(struct timeval *result, struct timeval *x,
+        struct timeval *y)
+    {
+        /* Perform the carry for the later subtraction by updating Y. */
+        if (x->tv_usec < y->tv_usec) {
+            int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+            y->tv_usec -= 1000000 * nsec;
+            y->tv_sec += nsec;
+        }
+        if (x->tv_usec - y->tv_usec > 1000000) {
+            int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+            y->tv_usec += 1000000 * nsec;
+            y->tv_sec -= nsec;
+        }
+
+        /* Compute the time remaining to wait.
+        * `tv_usec' is certainly positive. */
+        result->tv_sec = x->tv_sec - y->tv_sec;
+        result->tv_usec = x->tv_usec - y->tv_usec;
+
+        /* Return 1 if result is negative. */
+        return x->tv_sec < y->tv_sec;
+    }
 
 }
 
@@ -1134,12 +1204,8 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
                  const std::vector<unsigned char>& extranonce1, const std::vector<unsigned char>& extranonce2,
                  boost::optional<uint32_t> nVersion, uint32_t nTime, const std::vector<unsigned char>& sol)
 {
-
-    // if (fstdErrDebugOutput && extranonce1.size() > 3) {
-    //     std::string sExtraNonce1 = HexStr(extranonce1);
-    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, extranonce1[0], extranonce1[1], extranonce1[2], extranonce1[3], sExtraNonce1) << std::endl;
-    //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " extranonce1.size() = "  << extranonce1.size() << std::endl;
-    // }
+    // ["WORKER_NAME", "JOB_ID", "TIME", "NONCE_2", "EQUIHASH_SOLUTION"] <- this comes from client (miner)
+    // all other params we have saved in other places
 
     if (extranonce1.size() + extranonce2.size() != 32) {
         std::string msg = strprintf("extranonce1 [%d] length + extranonce2 [%d] length != %d", extranonce1.size(), extranonce2.size(), 32);
@@ -1161,90 +1227,12 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
     CustomizeWork(client, current_work, client.m_addr, extranonce1, extranonce2, cb, bf, cb_branch);
 
     bool res = false;
-    // if (!current_work.GetBlock().m_aux_pow.IsNull() && !current_work.m_aux_hash2) {
-    //     // Check auxiliary proof-of-work
-    //     uint32_t version = current_work.GetBlock().m_aux_pow.m_aux_version;
-    //     if (nVersion && client.m_version_rolling_mask) {
-    //         version = (version & ~client.m_version_rolling_mask)
-    //                 | (*nVersion & client.m_version_rolling_mask);
-    //     } else if (nVersion) {
-    //         version = *nVersion;
-    //     }
 
-    //     CMutableTransaction cb2(cb);
-    //     cb2.vin[0].scriptSig = CScript();
-    //     cb2.vin[0].nSequence = 0;
-
-    //     CBlockHeader blkhdr(current_work.GetBlock());
-    //     blkhdr.m_aux_pow.m_commit_hash_merkle_root = ComputeMerkleRootFromBranch(cb2.GetHash(), cb_branch, 0);
-    //     blkhdr.m_aux_pow.m_aux_branch.resize(1);
-    //     blkhdr.m_aux_pow.m_aux_branch[0] = cb.GetHash();
-    //     blkhdr.m_aux_pow.m_aux_num_txns = 2;
-    //     blkhdr.nTime = nTime;
-    //     blkhdr.m_aux_pow.m_aux_nonce = nNonce;
-    //     blkhdr.m_aux_pow.m_aux_version = version;
-
-    //     const Consensus::Params& params = Params().GetConsensus();
-    //     res = CheckAuxiliaryProofOfWork(blkhdr, params);
-    //     auto aux_hash = blkhdr.GetAuxiliaryHash(params);
-    //     if (res) {
-    //         LogPrintf("GOT AUXILIARY BLOCK!!! by %s: %s, %s\n", client.m_addr.ToString(), aux_hash.first.ToString(), aux_hash.second.ToString());
-    //         blkhdr.hashMerkleRoot = ComputeMerkleRootFromBranch(cb.GetHash(), cb_branch, 0);
-    //         uint256 new_job_id = blkhdr.GetHash();
-    //         work_templates[new_job_id] = current_work;
-    //         StratumWork& new_work = work_templates[new_job_id];
-    //         new_work.GetBlock().vtx[0] = MakeTransactionRef(std::move(cb));
-    //         if (new_work.m_is_witness_enabled) {
-    //             new_work.GetBlock().vtx.back() = MakeTransactionRef(std::move(bf));
-    //         }
-    //         new_work.GetBlock().hashMerkleRoot = BlockMerkleRoot(new_work.GetBlock(), nullptr);
-    //         new_work.m_cb_branch = cb_branch;
-    //         new_work.GetBlock().m_aux_pow.m_commit_hash_merkle_root = blkhdr.m_aux_pow.m_commit_hash_merkle_root;
-    //         new_work.GetBlock().m_aux_pow.m_aux_branch = blkhdr.m_aux_pow.m_aux_branch;
-    //         new_work.GetBlock().m_aux_pow.m_aux_num_txns = blkhdr.m_aux_pow.m_aux_num_txns;
-    //         new_work.GetBlock().nTime = nTime;
-    //         new_work.GetBlock().m_aux_pow.m_aux_nonce = nNonce;
-    //         new_work.GetBlock().m_aux_pow.m_aux_version = version;
-    //         new_work.m_aux_hash2 = aux_hash.second;
-    //         if (new_job_id != new_work.GetBlock().GetHash()) {
-    //             throw std::runtime_error("First-stage hash does not match expected value.");
-    //         }
-    //         half_solved_work = new_job_id;
-    //     } else {
-    //         LogPrintf("NEW AUXILIARY SHARE!!! by %s: %s, %s\n", client.m_addr.ToString(), aux_hash.first.ToString(), aux_hash.second.ToString());
-    //     }
-    // }
-
-    // else
     {
         // Check native proof-of-work
         uint32_t version = current_work.GetBlock().nVersion;
 
-        // if (nVersion && client.m_version_rolling_mask) {
-        //     version = (version & ~client.m_version_rolling_mask)
-        //             | (*nVersion & client.m_version_rolling_mask);
-        // } else
-        if (nVersion) {
-            version = *nVersion;
-        }
-
-        // if (fstdErrDebugOutput) {
-        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nTime = " << nTime << strprintf(" (%08x)", nTime) << std::endl;
-        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
-        // }
-
-        // if (fstdErrDebugOutput) {
-        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nTime = " << nTime << strprintf(" (%08x)", nTime) << std::endl;
-        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
-        // }
-
-        // if (/*!current_work.GetBlock().m_aux_pow.IsNull() &&*/ nTime != current_work.GetBlock().nTime) {
-        //     LogPrintf("Error: miner %s returned altered nTime value for native proof-of-work; nTime-rolling is not supported\n", client.m_addr.ToString());
-        //     throw JSONRPCError(RPC_INVALID_PARAMETER, "nTime-rolling is not supported");
-        // }
-
-        // CBlockHeader blkhdr;
-        // CBlock blkhdr;
+        if (nVersion) version = *nVersion;
         CBlockHeader blkhdr(current_work.GetBlock());
 
         blkhdr.nVersion = version;
@@ -1254,34 +1242,20 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         blkhdr.nTime = nTime;
         blkhdr.nBits = current_work.GetBlock().nBits;
 
-        // (!) should combime extranonce1 and extranonce2
-
-        std::vector<unsigned char> noncerev(extranonce1);
-        std::reverse(noncerev.begin(), noncerev.end());
-        noncerev.insert(noncerev.begin(), extranonce2.rbegin(), extranonce2.rend());
+        // just an example of how-to reverse the things, don't needed in real life
+        // std::vector<unsigned char> noncerev(extranonce1);
+        // std::reverse(noncerev.begin(), noncerev.end());
+        // noncerev.insert(noncerev.begin(), extranonce2.rbegin(), extranonce2.rend());
 
         std::vector<unsigned char> nonce(extranonce1);
         nonce.insert(nonce.end(), extranonce2.begin(), extranonce2.end());
-
-        // nonce = extranonce1 + extranonce2
-        // if (fstdErrDebugOutput) {
-        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
-        // }
-
-        // ["WORKER_NAME", "JOB_ID", "TIME", "NONCE_2", "EQUIHASH_SOLUTION"] <- this comes from client (miner)
-        // CustomizeWork: stratum.cpp,639 nonce = c2d9dd830000000000000000eacb000002000000000000000000000000000000
-        // SubmitBlock: stratum.cpp,1183 blkhdr = c2d9dd830000000000000000eacb000002000000000000000000000000000000
 
         blkhdr.nSolution = std::vector<unsigned char>(sol.begin() + 3, sol.end());
         blkhdr.hashFinalSaplingRoot = current_work.GetBlock().hashFinalSaplingRoot;
         blkhdr.hashMerkleRoot = current_work.GetBlock().hashMerkleRoot;
         blkhdr.nNonce = nonce;
 
-        //const CChainParams& chainparams = Params();
-        // 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c - 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c
-        // 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c - 7261205f5662e508d8cab9f2a3510055a1a5544eb033f0db912ec581ffabbf1c
-        // 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb - 3e49b5f954aa9d3545bc6c37744661eea48d7c34e3000d82b7f0010c30f4c2fb
-
+        // example how to display constructed block
         // if (fstdErrDebugOutput) {
         //     CBlockIndex index {blkhdr};
         //     index.SetHeight(current_work.nHeight);
@@ -1289,38 +1263,90 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr = " << blockToJSON(blkhdr, &index).write() << std::endl;
         // }
 
-        {
-            // LOCK(cs_main);
-            arith_uint256 bnTarget; bool fNegative, fOverflow;
-            bnTarget.SetCompact(blkhdr.nBits, &fNegative, &fOverflow);
-            // check range
-            // if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
-            //     return false;
-            if (UintToArith256(blkhdr.GetHash()) > bnTarget) {
-                res = false;
-            } else {
-                uint8_t pubkey33[33]; int32_t height = current_work.nHeight;
-                res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
-            }
-            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[1] = " << res << std::endl;
+
+        arith_uint256 bnTarget; bool fNegative, fOverflow;
+        bnTarget.SetCompact(blkhdr.nBits, &fNegative, &fOverflow);
+        // check range
+        // if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
+        //     return false;
+        if (UintToArith256(blkhdr.GetHash()) > bnTarget) {
+            res = false;
+        } else {
+            uint8_t pubkey33[33]; int32_t height = current_work.nHeight;
+            res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
         }
+        // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[1] = " << res << std::endl;
+
 
         uint256 hash = blkhdr.GetHash();
 
-        if (fstdErrDebugOutput)
-        {
-            // bits = GetNextWorkRequired(blockindex, nullptr, Params().GetConsensus());
-            // bits = blkhdr.nBits;
-            uint256 hashTarget = ArithToUint256(arith_uint256().SetCompact(blkhdr.nBits));
-            std::string strTarget = hashTarget.ToString();
+        // bits = GetNextWorkRequired(blockindex, nullptr, Params().GetConsensus());
+        // bits = blkhdr.nBits;
+        // uint256 hashTarget = ArithToUint256(arith_uint256().SetCompact(blkhdr.nBits));
+        // std::string strTarget = hashTarget.ToString();
+        // std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ <<
+        //             strprintf(" [%d] hash = %s, komodo_diff = %g, ccminer_diff = %g", current_work.GetBlock().vtx.size(),
+        //             blkhdr.GetHash().ToString(),
+        //             GetDifficultyFromBits(UintToArith256(blkhdr.GetHash()).GetCompact()),
+        //             ccminer::equi_stratum_target_to_diff(blkhdr.GetHash().ToString())) << std::endl;
 
-            std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ <<
-                     strprintf(" [%d] hash = %s, komodo_diff = %g, ccminer_diff = %g", current_work.GetBlock().vtx.size(),
-                     blkhdr.GetHash().ToString(),
-                     GetDifficultyFromBits(UintToArith256(blkhdr.GetHash()).GetCompact()),
-                     ccminer::equi_stratum_target_to_diff(blkhdr.GetHash().ToString())) << std::endl;
+        static uint64_t counter_TotalBlocks, counter_TotalShares, counter_prev;
+        if (res)
+            counter_TotalBlocks++;
+        counter_TotalShares++;
+
+        // https://en.cppreference.com/w/cpp/types/integer
+        // PRId64, PRIu64
+
+        // native proof-of-work difficulty
+        CBlockIndex tmp_index;
+
+        tmp_index.nBits = blkhdr.nBits;
+        double kmd_target_diff = GetDifficulty(&tmp_index); // diff from nbits (target)
+        tmp_index.nBits = UintToArith256(hash).GetCompact();
+        double kmd_real_diff = GetDifficulty(&tmp_index); // real diff (from hash)
+
+        double ccminer_real_diff = ccminer::equi_stratum_target_to_diff(hash.ToString());
+        double ccminer_target_diff = ccminer::equi_stratum_target_to_diff(arith_uint256().SetCompact(blkhdr.nBits).ToString());
+
+        // struct timeval tv_start, tv_end, diff;
+	    // double secs, solps;
+        // uint32_t soluce_count = 0;
+        // gettimeofday(&tv_start, NULL);
+        // gettimeofday(&tv_end, NULL);
+        // ccminer::timeval_subtract(&diff, &tv_end, &tv_start);
+        // secs = (1.0 * diff.tv_sec) + (0.000001 * diff.tv_usec);
+        // solps = (double)soluce_count / secs;
+
+        // auto start = std::chrono::high_resolution_clock::now();
+        // auto finish = std::chrono::high_resolution_clock::now();
+        // std::chrono::duration<double, std::milli> elapsed = finish - start;
+        // strprintf("Process took: %f ms", elapsed.count())
+
+        static std::chrono::high_resolution_clock::time_point start;
+        std::chrono::high_resolution_clock::time_point finish = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed;
+        uint64_t shares_accepted_since_last;
+
+        if (finish > start)
+        {
+            elapsed = finish - start;
+            shares_accepted_since_last = counter_TotalShares - counter_prev;
+            start = finish;
+            counter_prev = counter_TotalShares;
+            // std::cerr << strprintf("%f ms - %" PRIu64 "", elapsed.count(), shares_accepted_since_last) << std::endl;
         }
 
+        std::cerr << DateTimeStrPrecise() <<
+                     strprintf("%saccepted: %" PRIu64 "/%" PRIu64 " ", ColorTypeNames[cl_WHT], counter_TotalBlocks, counter_TotalShares ) <<
+                     // strprintf("(diff %g, target %g) %s ", kmd_real_diff, kmd_target_diff, ColorTypeNames[cl_N]) << // komodod_diff
+                     // strprintf("(diff %s, target %s) %s ", ccminer_real_diff, ccminer_target_diff, ColorTypeNames[cl_N]) << // ccminer diff
+                     strprintf("(diff %.3f, target %.3f) %s", ccminer_real_diff, ccminer_target_diff, ColorTypeNames[cl_N]) << // ccminer diff
+                     strprintf("%f ms ", elapsed.count()) << // 1 share took elapsed ms
+                     strprintf("%s%s%s ", ColorTypeNames[cl_LGR], (res ? "yay!!!": "yes!"), ColorTypeNames[cl_N]) <<
+        std::endl;
+
+        // (diff %g, target %g), %
         if (res) {
 
             LogPrintf("GOT BLOCK!!! by %s: %s\n", client.m_addr.ToString(), hash.ToString());
@@ -1344,21 +1370,21 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nNonce = nonce;
             block.nSolution = std::vector<unsigned char>(sol.begin() + 3, sol.end());
 
+            // example how to pre-check the equihash solution
+            // if(fstdErrDebugOutput) {
+            //     CBlockIndex index {blkhdr};
+            //     index.SetHeight(-1);
+            //     std::cerr << "block = " << blockToJSON(block, &index, true).write(1) << std::endl;
+            //     std::cerr << "CheckEquihashSolution = " << CheckEquihashSolution(&block, Params()) << std::endl;
+            // }
 
-            std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
+            // std::shared_ptr<const CBlock> pblock = std::make_shared<const CBlock>(block);
             // res = ProcessNewBlock(Params(), pblock, true, NULL);
+
             CValidationState state;
-
-            if(fstdErrDebugOutput) {
-                CBlockIndex index {blkhdr};
-                index.SetHeight(-1);
-                std::cerr << "block = " << blockToJSON(block, &index, true).write(1) << std::endl;
-                std::cerr << "CheckEquihashSolution = " << CheckEquihashSolution(&block, Params()) << std::endl;
-            }
-
             res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
 
-            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[2] = " << res << std::endl;
+            //if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[2] = " << res << std::endl;
 
             if (res) {
                 // LOCK(cs_main);
@@ -2257,8 +2283,6 @@ void SendKeepAlivePackets()
                 "client.m_supports_extranonce = " << client.m_supports_extranonce << std::endl <<
                 "client.m_send_work = " << client.m_send_work << std::endl <<
                 std::endl;
-
-                // "client.m_last_tip.GetHeight() = " << client.m_last_tip->GetHeight() <<
             }
 
             // Ignore clients that aren't authorized yet.
@@ -2266,7 +2290,7 @@ void SendKeepAlivePackets()
                 continue;
             }
 
-            std::string data = "\r\n"; // JSONRPCReply(NullUniValue, NullUniValue, NullUniValue);
+            std::string data = "\r\n";
             // to see the socket / connection is alive, we will see bunch of
             // JSON decode failed(1): '[' or '{' expected near end of file
             // on client if will send "\r\n" every second
@@ -2284,6 +2308,7 @@ void SendKeepAlivePackets()
                 client.m_last_tip = (client.m_last_tip ? nullptr : chainActive.Tip());
                 client.m_nextid++;
                 cvBlockChange.notify_all(); // change the state of all threads waiting on *this to ready
+                // cvBlockChange.notify_one(); // if there is a thread waiting on *this, change that thread state to ready
             }
         }
 

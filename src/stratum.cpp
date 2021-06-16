@@ -1907,6 +1907,21 @@ UniValue stratum_mining_extranonce_subscribe(StratumClient& client, const UniVal
     return true;
 }
 
+UniValue stratum_mining_multi_version(StratumClient& client, const UniValue& params)
+{
+    const std::string method("mining.multi_version");
+    BoundParams(method, params, 0, 1);
+
+    /*
+    Received stratum request from Miner: {"id": 135828, "method": "mining.multi_version", "params": [1]}
+    Sending stratum response to Miner : {"result":null,"error":{"code":-32601,"message":"Method 'mining.multi_version' not found"},"id":135828}
+    */
+
+    return false;
+}
+
+
+
 /** Callback to write from a stratum connection. */
 static void stratum_write_cb(bufferevent *bev, void *ctx)
 {
@@ -2307,6 +2322,9 @@ bool InitStratumServer()
         stratum_mining_aux_subscribe;
     stratum_method_dispatch["mining.extranonce.subscribe"] =
         stratum_mining_extranonce_subscribe;
+    stratum_method_dispatch["mining.multi_version"] =
+        stratum_mining_multi_version;
+
 
     // Start thread to wait for block notifications and send updated
     // work to miners.

@@ -1066,7 +1066,8 @@ std::string GetWorkUnit(StratumClient& client)
     // params.push_back(HexInt4(blkhdr.nTime));
     // params.push_back(UniValue((client.m_last_tip != tip)
     //                        || (client.m_second_stage != bool(current_work.m_aux_hash2))));
-    // client.m_last_tip = tip;
+    client.m_last_tip = tip;
+
     // client.m_second_stage = bool(current_work.m_aux_hash2);
 
     UniValue mining_notify(UniValue::VOBJ);
@@ -2168,7 +2169,9 @@ void SendKeepAlivePackets()
                 "client.m_authorized = " << client.m_authorized << std::endl <<
                 "client.m_aux_addr.size() = " << client.m_aux_addr.size() << std::endl <<
                 "client.m_last_tip = " << strprintf("%p", client.m_last_tip) << std::endl <<
+                (client.m_last_tip ? strprintf("client.m_last_tip->GetHeight() = %d", client.m_last_tip->GetHeight()) : "") << std::endl <<
                 "chainActive.Tip()->GetHeight() = " << chainActive.Tip()->GetHeight() << std::endl <<
+                "client.m_supports_extranonce = " << client.m_supports_extranonce << std::endl <<
                 std::endl;
 
                 // "client.m_last_tip.GetHeight() = " << client.m_last_tip->GetHeight() <<
@@ -2178,17 +2181,8 @@ void SendKeepAlivePackets()
             if (!client.m_authorized && client.m_aux_addr.empty()) {
                 continue;
             }
-            // Ignore clients that are already working on the new block.
-            // Typically this is just the miner that found the block, who was
-            // immediately sent a work update.  This check avoids sending that
-            // work notification again, moments later.  Due to race conditions
-            // there could be more than one miner that have already received an
-            // update, however.
-            if (client.m_last_tip == chainActive.Tip()) {
-                continue;
-            }
 
-            std::string data = JSONRPCReply(NullUniValue, NullUniValue, NullUniValue);
+            std::string data = "\r\n"; // JSONRPCReply(NullUniValue, NullUniValue, NullUniValue);
             // to see the socket / connection is alive, we will see bunch of
             // [2021-06-16 03:01:31] JSON decode failed(1): '[' or '{' expected near end of file
             // on client if will send "\r\n" every second

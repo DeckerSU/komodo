@@ -2112,7 +2112,9 @@ void BlockWatcher()
     boost::unique_lock<boost::mutex> lock(csBestBlock);
     boost::system_time checktxtime = boost::get_system_time();
     unsigned int txns_updated_last = 0;
+    std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
     while (true) {
+        std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
         checktxtime += boost::posix_time::seconds(15);
         if (!cvBlockChange.timed_wait(lock, checktxtime)) {
             // Timeout: Check to see if mempool was updated.
@@ -2127,6 +2129,7 @@ void BlockWatcher()
             txns_updated_last = txns_updated_next;
         }
 
+        std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
         LOCK(cs_stratum);
 
         if (g_shutdown) {
@@ -2248,6 +2251,7 @@ void SendKeepAlivePackets()
                 mempool.AddTransactionsUpdated(1);
                 client.m_last_tip = (client.m_last_tip ? nullptr : chainActive.Tip());
                 client.m_nextid++;
+                cvBlockChange.notify_all(); // change the state of all threads waiting on *this to ready
             }
         }
 

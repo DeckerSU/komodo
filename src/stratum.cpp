@@ -1027,7 +1027,8 @@ std::string GetWorkUnit(StratumClient& client)
     params.push_back(HexStr(blkhdr.hashMerkleRoot)); // MERKLEROOT
     params.push_back(HexStr(blkhdr.hashFinalSaplingRoot)); // RESERVED -> hashFinalSaplingRoot
 
-    UpdateTime(&blkhdr, Params().GetConsensus(), tip /* or pindexPrev [tip-1] is needed? */);
+    // UpdateTime(&blkhdr, Params().GetConsensus(), tip /* or pindexPrev [tip-1] is needed? */);
+    blkhdr.nTime = GetTime();
 
     params.push_back(HexInt4(bswap_32(blkhdr.nTime))); // TIME
     params.push_back(HexInt4(bswap_32(blkhdr.nBits))); // BITS
@@ -1199,13 +1200,20 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
         // }
 
-        if (/*!current_work.GetBlock().m_aux_pow.IsNull() &&*/ nTime != current_work.GetBlock().nTime) {
-            LogPrintf("Error: miner %s returned altered nTime value for native proof-of-work; nTime-rolling is not supported\n", client.m_addr.ToString());
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "nTime-rolling is not supported");
-        }
+        // if (fstdErrDebugOutput) {
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nTime = " << nTime << strprintf(" (%08x)", nTime) << std::endl;
+        //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " current_work.GetBlock().nTime = " << current_work.GetBlock().nTime << strprintf(" (%08x)", current_work.GetBlock().nTime) << std::endl;
+        // }
+
+        // if (/*!current_work.GetBlock().m_aux_pow.IsNull() &&*/ nTime != current_work.GetBlock().nTime) {
+        //     LogPrintf("Error: miner %s returned altered nTime value for native proof-of-work; nTime-rolling is not supported\n", client.m_addr.ToString());
+        //     throw JSONRPCError(RPC_INVALID_PARAMETER, "nTime-rolling is not supported");
+        // }
 
         // CBlockHeader blkhdr;
-        CBlock blkhdr;
+        // CBlock blkhdr;
+        CBlockHeader blkhdr(current_work.GetBlock());
+
         blkhdr.nVersion = version;
         blkhdr.hashPrevBlock = current_work.GetBlock().hashPrevBlock;
         // blkhdr.hashMerkleRoot = ComputeMerkleRootFromBranch(cb.GetHash(), cb_branch, 0);
@@ -2164,7 +2172,7 @@ void SendKeepAlivePackets()
             StratumClient& client = subscription.second;
 
             if (fstdErrDebugOutput) {
-                std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ <<
+                std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl <<
                 "client.m_authorized = " << client.m_authorized << std::endl <<
                 "client.m_aux_addr.size() = " << client.m_aux_addr.size() << std::endl <<
                 "client.m_last_tip = " << strprintf("%p", client.m_last_tip) << std::endl <<

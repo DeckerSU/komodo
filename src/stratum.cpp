@@ -85,8 +85,6 @@ extern uint16_t ASSETCHAINS_RPCPORT; // don't want to include komodo_globals.h
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false); // rpc/blockchain.cpp
 bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_read.cpp
 
-static const bool fstdErrDebugOutput = true;
-
 static const long jobRebroadcastTimeout = 30;
 static const long txMemPoolCheckTimeout = 10;
 
@@ -97,6 +95,26 @@ static const long txMemPoolCheckTimeout = 10;
 */
 
 namespace { // better to use anonymous namespace for helper routines
+
+    class CStratumParams {
+        private:
+            const arith_uint256 defaultHashTarget;
+            arith_uint256 currentHashTarget;
+        public:
+            CStratumParams() : defaultHashTarget(UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000"))),
+                            currentHashTarget(defaultHashTarget), fAllowLowDiffShares(false), fCheckEquihashSolution(true),
+                            fstdErrDebugOutput(false) { }
+            ~CStratumParams() {}
+            void setTarget(const arith_uint256& diff) {
+                currentHashTarget = defaultHashTarget / diff;
+            }
+            arith_uint256 getTarget() { return currentHashTarget; }
+
+            bool fAllowLowDiffShares;
+            bool fCheckEquihashSolution;
+            bool fstdErrDebugOutput;
+
+    } instance_of_cstratumparams;
 
     // TODO: fix places which using CSubNet(...) constructors with numeric (/8, /16, /24, etc.) mask
 
@@ -704,7 +722,7 @@ void CustomizeWork(const StratumClient& client, const StratumWork& current_work,
     nonce.insert(nonce.end(), extranonce2.begin(), extranonce2.end());
 
     // nonce = extranonce1 + extranonce2
-    // if (fstdErrDebugOutput) {
+    // if (instance_of_cstratumparams.fstdErrDebugOutput) {
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " nonce = " << HexStr(nonce) << std::endl;
     // }
 
@@ -796,14 +814,14 @@ std::string GetWorkUnit(StratumClient& client)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
         }
 
-        // if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
+        // if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
 
         // So that block.GetHash() is correct
         //new_work->block.hashMerkleRoot = BlockMerkleRoot(new_work->block);
         new_work->block.hashMerkleRoot = new_work->block.BuildMerkleTree();
 
         // NB! here we have merkle with scriptDummy script in coinbase, after CustomizeWork we should recalculate it (!)
-        // if (fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
+        // if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << "hashMerkleRoot = " << new_work->block.hashMerkleRoot.ToString() << std::endl;
 
         job_id = new_work->block.GetHash();
         //work_templates[job_id] = StratumWork(*new_work, new_work->block.vtx[0]->HasWitness());
@@ -883,7 +901,9 @@ std::string GetWorkUnit(StratumClient& client)
         hashTarget.SetHex("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"); // komodo_diff = 1, ccminer_diff = 16.9956
         */
 
-        arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000")); // 1.0
+        arith_uint256 aHashTarget = instance_of_cstratumparams.getTarget();
+
+        // arith_uint256 aHashTarget = UintToArith256(uint256S("00ffff0000000000000000000000000000000000000000000000000000000000")); // 1.0
         // aHashTarget = aHashTarget / 8704; // komodo_diff = 131074 (NiceHash), ccminer_diff = 8704 (Yiimp)
 
         /* here we can adjust diff by some algo, note that 00ffff0000000000000000000000000000000000000000000000000000000000 / 8704 =
@@ -892,11 +912,10 @@ std::string GetWorkUnit(StratumClient& client)
         */
 
         hashTarget = aHashTarget;
-
         strTarget = hashTarget.GetHex();
         current_work.local_diff = strTarget;
 
-        if (fstdErrDebugOutput) {
+        if (instance_of_cstratumparams.fstdErrDebugOutput) {
             std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ <<
                     strprintf(" target = %s, komodo_diff = %g, ccminer_diff = %g",
                     strTarget, GetDifficultyFromBits(hashTarget.GetCompact(false)), ccminer::equi_stratum_target_to_diff(strTarget)) << std::endl;
@@ -909,7 +928,7 @@ std::string GetWorkUnit(StratumClient& client)
     CMutableTransaction cb, bf;
     std::vector<uint256> cb_branch;
 
-    // if (fstdErrDebugOutput)
+    // if (instance_of_cstratumparams.fstdErrDebugOutput)
     // {
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] cb = " << CTransaction(cb).ToString() << std::endl;
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [1] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
@@ -931,7 +950,7 @@ std::string GetWorkUnit(StratumClient& client)
 
     }
 
-    // if (fstdErrDebugOutput)
+    // if (instance_of_cstratumparams.fstdErrDebugOutput)
     // {
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] cb = " << CTransaction(cb).ToString() << std::endl;
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " [2] current_work.GetBlock().vtx[0] = " << current_work.GetBlock().vtx[0].ToString() << std::endl;
@@ -983,7 +1002,7 @@ std::string GetWorkUnit(StratumClient& client)
     clean_jobs = client.m_last_tip != tip;
     params.push_back(clean_jobs); // CLEAN_JOBS
 
-    if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "New job: " << HexStr(job_id) << " " << strprintf("%08x", blkhdr.nTime) << std::endl;
+    if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "New job: " << HexStr(job_id) << " " << strprintf("%08x", blkhdr.nTime) << std::endl;
 
     client.m_last_tip = tip;
 
@@ -1051,7 +1070,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         blkhdr.nNonce = nonce;
 
         // example how to display constructed block
-        // if (fstdErrDebugOutput) {
+        // if (instance_of_cstratumparams.fstdErrDebugOutput) {
         //     CBlockIndex index {blkhdr};
         //     index.SetHeight(current_work.nHeight);
         //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " blkhdr.hashPrevBlock = " << blkhdr.hashPrevBlock.GetHex() << std::endl;
@@ -1059,7 +1078,8 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         // }
 
         // block is constructed, now it's time to VerifyEH
-        if (!CheckEquihashSolution(&blkhdr, Params()))
+
+        if (instance_of_cstratumparams.fCheckEquihashSolution && !CheckEquihashSolution(&blkhdr, Params()))
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid equihash solution");
 
         arith_uint256 bnTarget; bool fNegative, fOverflow;
@@ -1075,7 +1095,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             uint8_t pubkey33[33]; int32_t height = current_work.nHeight;
             res = CheckProofOfWork(blkhdr, pubkey33, height, Params().GetConsensus());
         }
-        // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[1] = " << res << std::endl;
+        // if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[1] = " << res << std::endl;
 
         uint256 hash = blkhdr.GetHash();
 
@@ -1107,7 +1127,10 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         std::chrono::duration<double, std::milli> elapsed;
         uint64_t shares_accepted_since_last;
 
-        // TODO: we need to check hash < local port diff, and if it's lower throw an exception -> diff too low (!)
+        // TODO: we need to check hash > local port diff, and if it's true -> throw an exception -> diff too low (!)
+        if (!instance_of_cstratumparams.fAllowLowDiffShares)
+            if (UintToArith256(blkhdr.GetHash()) > arith_uint256(current_work.local_diff))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Low diff share (diff %g, local %g)", kmd_real_diff, kmd_local_diff));
 
         if (finish > start)
         {
@@ -1153,7 +1176,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nVersion = version;
             // block.hashMerkleRoot = BlockMerkleRoot(block);
             block.hashMerkleRoot = block.BuildMerkleTree();
-            //if (fstdErrDebugOutput) std::cerr << "hashMerkleRoot = " << block.hashMerkleRoot.GetHex() << std::endl;
+            //if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << "hashMerkleRoot = " << block.hashMerkleRoot.GetHex() << std::endl;
 
             block.nTime = nTime;
             // block.nNonce = nNonce;
@@ -1163,7 +1186,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             block.nSolution = std::vector<unsigned char>(sol.begin() + 3, sol.end());
 
             // example how to pre-check the equihash solution
-            // if(fstdErrDebugOutput) {
+            // if(instance_of_cstratumparams.fstdErrDebugOutput) {
             //     CBlockIndex index {blkhdr};
             //     index.SetHeight(-1);
             //     std::cerr << "block = " << blockToJSON(block, &index, true).write(1) << std::endl;
@@ -1176,7 +1199,7 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
             CValidationState state;
             res = ProcessNewBlock(0,0,state, NULL, &block, true /* forceProcessing */ , NULL);
 
-            //if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[2] = " << res << std::endl;
+            //if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "res[2] = " << res << std::endl;
 
             if (res) {
                 // LOCK(cs_main);
@@ -1261,7 +1284,7 @@ UniValue stratum_mining_subscribe(StratumClient& client, const UniValue& params)
      * sExtraNonce1 for a given client based on m_secret.
      */
 
-    // if (fstdErrDebugOutput && vExtraNonce1.size() > 3) {
+    // if (instance_of_cstratumparams.fstdErrDebugOutput && vExtraNonce1.size() > 3) {
     //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << " " << strprintf("client.m_supports_extranonce = %d, [%d, %d, %d, %d], %s", client.m_supports_extranonce, vExtraNonce1[0], vExtraNonce1[1], vExtraNonce1[2], vExtraNonce1[3], sExtraNonce1) << std::endl;
     //     // recalc from client.m_secret example
     //     uint256 sha256;
@@ -1670,14 +1693,14 @@ void BlockWatcher()
     boost::posix_time::time_duration time_passed = boost::posix_time::seconds(0);
     bool fRebroadcastAnyway = false;
 
-    if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
+    if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
     while (true) { // (A)
         /* This will execute before waiting of cvBlockChange */
 
-        if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
+        if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
         checktxtime = boost::get_system_time() + boost::posix_time::seconds(txMemPoolCheckTimeout);
         // - time_passed
-        if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
+        if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
 
         if (!cvBlockChange.timed_wait(lock, checktxtime)) {
             // Timeout: Check to see if mempool was updated.
@@ -1685,15 +1708,15 @@ void BlockWatcher()
             /* This will execute after txMemPoolCheckTimeout seconds */
             unsigned int txns_updated_next = mempool.GetTransactionsUpdated();
 
-            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << ColorTypeNames[cl_WHT] << " seconds_passed = " << (boost::get_system_time() - starttime) << ColorTypeNames[cl_N] << " txns_updated_last = " << txns_updated_last << " txns_updated_next = " << txns_updated_next << std::endl;
+            if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << ColorTypeNames[cl_WHT] << " seconds_passed = " << (boost::get_system_time() - starttime) << ColorTypeNames[cl_N] << " txns_updated_last = " << txns_updated_last << " txns_updated_next = " << txns_updated_next << std::endl;
             time_passed = boost::posix_time::time_duration(boost::get_system_time() - starttime);
 
             if ((boost::get_system_time() - starttime) < boost::posix_time::seconds(jobRebroadcastTimeout)) {
-                if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "seconds_passed < jobRebroadcastTimeout" << std::endl;
+                if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "seconds_passed < jobRebroadcastTimeout" << std::endl;
                 fRebroadcastAnyway = false;
                 if (txns_updated_last == txns_updated_next) continue; // (A)
             } else {
-                if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << ColorTypeNames[cl_GRN] << "Force update work!"<< ColorTypeNames[cl_N] << " seconds_passed >= jobRebroadcastTimeout" << std::endl;
+                if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << ColorTypeNames[cl_GRN] << "Force update work!"<< ColorTypeNames[cl_N] << " seconds_passed >= jobRebroadcastTimeout" << std::endl;
                 // in case of rebroadcast we should "emulate" that everything is changed and clients must go for new work
                 mempool.AddTransactionsUpdated(1);
                 for (auto& subscription : subscriptions) {
@@ -1703,14 +1726,14 @@ void BlockWatcher()
                 starttime += boost::posix_time::seconds(jobRebroadcastTimeout);
             }
 
-            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+            if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
             txns_updated_last = txns_updated_next;
         }
 
         /* This will excute after wait cvBlockChange will completed, or if 'timeout branch' will allow
            execution goes here (mean, if it will not use condition with `continue`) */
 
-        if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
+        if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
 
         LOCK(cs_stratum);
 
@@ -1744,7 +1767,7 @@ void BlockWatcher()
                 continue;
             }
 
-            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
+            if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
 
             // Get new work
             std::string data;
@@ -1765,7 +1788,7 @@ void BlockWatcher()
                 LogPrint("stratum", "Sending stratum work unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
             }
         }
-        if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
+        if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
     }
 }
 
@@ -1798,7 +1821,7 @@ void SendKeepAlivePackets()
 
             StratumClient& client = subscription.second;
 
-            if (fstdErrDebugOutput) {
+            if (instance_of_cstratumparams.fstdErrDebugOutput) {
                 std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl <<
                 "client.m_authorized = " << client.m_authorized << std::endl <<
                 "client.m_aux_addr.size() = " << client.m_aux_addr.size() << std::endl <<

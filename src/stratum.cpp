@@ -7,7 +7,7 @@
  * @file stratum.cpp
  * @author Decker
  * @brief Equihash Stratum implementation for Komodo (KMD) daemon
- * @version 0.1.1
+ * @version 0.1.2
  * @date 2021-06-16
  *
  * @copyright Copyright (c) 2021
@@ -88,7 +88,7 @@ bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_rea
 static const bool fstdErrDebugOutput = true;
 
 static const long jobRebroadcastTimeout = 30;
-static const long txMemPoolCheckTimeout = 15;
+static const long txMemPoolCheckTimeout = 10;
 
 /**
  * Begin of helper routines,
@@ -1667,6 +1667,7 @@ void BlockWatcher()
     boost::system_time starttime = boost::get_system_time();
 
     unsigned int txns_updated_last = 0;
+    boost::posix_time::time_duration time_passed = boost::posix_time::seconds(0);
     bool fRebroadcastAnyway = false;
 
     if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
@@ -1675,6 +1676,7 @@ void BlockWatcher()
 
         if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
         checktxtime = boost::get_system_time() + boost::posix_time::seconds(txMemPoolCheckTimeout);
+        // - time_passed
         if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
 
         if (!cvBlockChange.timed_wait(lock, checktxtime)) {
@@ -1684,6 +1686,7 @@ void BlockWatcher()
             unsigned int txns_updated_next = mempool.GetTransactionsUpdated();
 
             if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << ColorTypeNames[cl_WHT] << " seconds_passed = " << (boost::get_system_time() - starttime) << ColorTypeNames[cl_N] << " txns_updated_last = " << txns_updated_last << " txns_updated_next = " << txns_updated_next << std::endl;
+            time_passed = boost::posix_time::time_duration(boost::get_system_time() - starttime);
 
             if ((boost::get_system_time() - starttime) < boost::posix_time::seconds(jobRebroadcastTimeout)) {
                 if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "seconds_passed < jobRebroadcastTimeout" << std::endl;

@@ -1943,4 +1943,32 @@ void StopStratumServer()
     work_templates.clear();
 }
 
+/* RPC */
+UniValue  rpc_stratum_updatework(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "stratum_updatework\n"
+            "Tries to immediatelly update work on all connected miners.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("stratum_updatework", "")
+            + HelpExampleRpc("stratum_updatework", "")
+        );
+    UniValue obj(UniValue::VOBJ);
+
+    return obj;
+}
+
+static const CRPCCommand commands[] =
+{ //  category              name                      actor (function)         okSafeMode
+  //  --------------------- ------------------------  -----------------------  ----------
+    { "stratum",            "stratum_updatework",     &rpc_stratum_updatework, true },
+};
+
+void RegisterStratumRPCCommands(CRPCTable &tableRPC)
+{
+    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
+        tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+}
+
 // End of File

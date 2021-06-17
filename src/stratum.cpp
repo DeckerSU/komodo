@@ -87,6 +87,9 @@ bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx); // src/core_rea
 
 static const bool fstdErrDebugOutput = true;
 
+static const long jobRebroadcastTimeout = 30;
+static const long txMemPoolCheckTimeout = 15;
+
 /**
  * Begin of helper routines,
  * included: missed in httpserver.cpp in our codebase, missed
@@ -1135,15 +1138,17 @@ std::string GetWorkUnit(StratumClient& client)
     params.push_back(HexStr(blkhdr.hashMerkleRoot)); // MERKLEROOT
     params.push_back(HexStr(blkhdr.hashFinalSaplingRoot)); // RESERVED -> hashFinalSaplingRoot
 
-    // UpdateTime(&blkhdr, Params().GetConsensus(), tip /* or pindexPrev [tip-1] is needed? */);
-    blkhdr.nTime = GetTime();
+    UpdateTime(&blkhdr, Params().GetConsensus(), tip /* or pindexPrev [tip-1] is needed? */);
+    // blkhdr.nTime = GetTime();
 
     params.push_back(HexInt4(bswap_32(blkhdr.nTime))); // TIME
     params.push_back(HexInt4(bswap_32(blkhdr.nBits))); // BITS
-    // Clean Jobs. If true, miners should abort their current work and immediately use the new job. If false, they can still use the current job, but should move to the new one after exhausting the current nonce range.
+
+    // Clean Jobs. If true, miners should abort their current work and immediately use the new job.
+    // If false, they can still use the current job, but should move to the new one after exhausting the current nonce range.
 
     UniValue clean_jobs(UniValue::VBOOL);
-    clean_jobs = client.m_last_tip != tip; // true
+    clean_jobs = client.m_last_tip != tip;
     params.push_back(clean_jobs); // CLEAN_JOBS
 
 
@@ -2185,33 +2190,47 @@ void BlockWatcher()
     RenameThread("blkwatcher");
     boost::unique_lock<boost::mutex> lock(csBestBlock);
     boost::system_time checktxtime = boost::get_system_time();
-    unsigned int txns_updated_last = 0;
-    std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
-    while (true) {
-        /* This will execute before waiting of cvBlockChange */
-        // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+    boost::system_time starttime = checktxtime;
 
-        checktxtime += boost::posix_time::seconds(15);
+    unsigned int txns_updated_last = 0;
+    bool fRebroadcastAnyway = false;
+
+    if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+    while (true) { // (A)
+        /* This will execute before waiting of cvBlockChange */
+        if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+
+        checktxtime += boost::posix_time::seconds(txMemPoolCheckTimeout);
         if (!cvBlockChange.timed_wait(lock, checktxtime)) {
             // Timeout: Check to see if mempool was updated.
 
-            /* This will execute every 15 seconds, during waiting */
+            /* This will execute after txMemPoolCheckTimeout seconds */
             unsigned int txns_updated_next = mempool.GetTransactionsUpdated();
-            // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " txns_updated_last = " << txns_updated_last << " txns_updated_next = " << txns_updated_next << std::endl;
-            if (txns_updated_last == txns_updated_next)
-                continue;
-            // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+
+            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << ColorTypeNames[cl_WHT] << " seconds_passed = " << (checktxtime - starttime) << ColorTypeNames[cl_N] << " txns_updated_last = " << txns_updated_last << " txns_updated_next = " << txns_updated_next << std::endl;
+
+            if ((checktxtime - starttime) < boost::posix_time::seconds(jobRebroadcastTimeout)) {
+                if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << "seconds_passed < jobRebroadcastTimeout" << std::endl;
+                fRebroadcastAnyway = false;
+                if (txns_updated_last == txns_updated_next) continue; // (A)
+            } else {
+                if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << ColorTypeNames[cl_GRN] << "Force update work!"<< ColorTypeNames[cl_N] << " seconds_passed >= jobRebroadcastTimeout" << std::endl;
+                starttime = checktxtime;
+                // in case of rebroadcast we should "emulate" that everything is changed and clients must go for new work
+                mempool.AddTransactionsUpdated(1);
+                for (auto& subscription : subscriptions) {
+                    subscription.second.m_last_tip = (subscription.second.m_last_tip ? nullptr : chainActive.Tip());
+                }
+                fRebroadcastAnyway = true;
+            }
+
+            if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
             txns_updated_last = txns_updated_next;
         }
 
-        /*
-            [2021-06-17 08:42:07.759324] BlockWatcher: stratum.cpp,2200
-            [2021-06-17 08:42:07.759370] BlockWatcher: stratum.cpp,2192
-            [2021-06-17 08:42:22.759321] BlockWatcher: stratum.cpp,2200
-            [2021-06-17 08:42:22.759371] BlockWatcher: stratum.cpp,2192
-        */
+        /* This will excute after wait cvBlockChange will completed, or if 'timeout branch' will allow
+           execution goes here (mean, if it will not use condition with `continue`) */
 
-        /* This will excute only after wait cvBlockChange will completed  */
         if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
         LOCK(cs_stratum);
 
@@ -2241,7 +2260,7 @@ void BlockWatcher()
             // work notification again, moments later.  Due to race conditions
             // there could be more than one miner that have already received an
             // update, however.
-            if (client.m_last_tip == chainActive.Tip()) {
+            if (!fRebroadcastAnyway && client.m_last_tip == chainActive.Tip()) {
                 continue;
             }
 
@@ -2389,7 +2408,7 @@ bool InitStratumServer()
     // Start thread to wait for block notifications and send updated
     // work to miners.
     block_watcher_thread = boost::thread(BlockWatcher);
-    block_watcher_thread = boost::thread(SendKeepAlivePackets);
+    // block_watcher_thread = boost::thread(SendKeepAlivePackets);
 
     return true;
 }

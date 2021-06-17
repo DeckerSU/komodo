@@ -2188,22 +2188,31 @@ void BlockWatcher()
     unsigned int txns_updated_last = 0;
     std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
     while (true) {
-        std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+        /* This will execute before waiting of cvBlockChange */
+        // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+
         checktxtime += boost::posix_time::seconds(15);
         if (!cvBlockChange.timed_wait(lock, checktxtime)) {
             // Timeout: Check to see if mempool was updated.
 
-            // if (fstdErrDebugOutput) {
-            //     std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << DateTimeStrPrecise() << std::endl;
-            // }
-
+            /* This will execute every 15 seconds, during waiting */
             unsigned int txns_updated_next = mempool.GetTransactionsUpdated();
+            // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " txns_updated_last = " << txns_updated_last << " txns_updated_next = " << txns_updated_next << std::endl;
             if (txns_updated_last == txns_updated_next)
                 continue;
+            // if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
             txns_updated_last = txns_updated_next;
         }
 
-        std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
+        /*
+            [2021-06-17 08:42:07.759324] BlockWatcher: stratum.cpp,2200
+            [2021-06-17 08:42:07.759370] BlockWatcher: stratum.cpp,2192
+            [2021-06-17 08:42:22.759321] BlockWatcher: stratum.cpp,2200
+            [2021-06-17 08:42:22.759371] BlockWatcher: stratum.cpp,2192
+        */
+
+        /* This will excute only after wait cvBlockChange will completed  */
+        if (fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl;
         LOCK(cs_stratum);
 
         if (g_shutdown) {

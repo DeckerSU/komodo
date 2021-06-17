@@ -997,7 +997,7 @@ std::string GetWorkUnit(StratumClient& client)
 
         */
 
-        arith_uint256 aHashTarget = UintToArith256(uint256S("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f")); // 1.0
+        arith_uint256 aHashTarget = UintToArith256(uint256S("003fffc000000000000000000000000000000000000000000000000000000000")); // 1.0
         // aHashTarget = aHashTarget / 8704; // komodo_diff = 131074 (NiceHash), ccminer_diff = 8704 (Yiimp)
         hashTarget = aHashTarget;
 
@@ -1349,15 +1349,15 @@ bool SubmitBlock(StratumClient& client, const uint256& job_id, const StratumWork
         if (fDisplayDiffKMD) {
             /* komodod diff display */
             std::cerr << strprintf("%slocal %g%s ", "\x1B[90m", kmd_local_diff, ColorTypeNames[cl_N]) <<
-                         strprintf("(diff %g, target %g) %s ", kmd_real_diff, kmd_target_diff, ColorTypeNames[cl_N]);
-        } 
-        else 
+                         strprintf("%s(diff %g, target %g) %s ", ColorTypeNames[cl_WHT], kmd_real_diff, kmd_target_diff, ColorTypeNames[cl_N]);
+        }
+        else
         {   /* ccminer diff display */
-            std::cerr << strprintf("%slocal %.3f%s ", "\x1B[90m", ccminer_local_diff, ColorTypeNames[cl_N]) << 
+            std::cerr << strprintf("%slocal %.3f%s ", "\x1B[90m", ccminer_local_diff, ColorTypeNames[cl_N]) <<
                          strprintf("%s(diff %.3f, target %.3f) %s", ColorTypeNames[cl_WHT], ccminer_real_diff, ccminer_target_diff, ColorTypeNames[cl_N]); // ccminer diff
         }
 
-        std::cerr << "" <<                     
+        std::cerr << "" <<
                      strprintf("%f ms ", elapsed.count()) << // 1 share took elapsed ms
                      strprintf("%s%s%s ", ColorTypeNames[cl_LGR], (res ? "yay!!!": "yes!"), ColorTypeNames[cl_N]) <<
         std::endl;

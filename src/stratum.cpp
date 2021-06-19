@@ -2046,10 +2046,40 @@ UniValue rpc_stratum_updatework(const UniValue& params, bool fHelp, const CPubKe
     return obj;
 }
 
+UniValue rpc_stratum_getdifficulty (const UniValue& params, bool fHelp, const CPubKey& mypk) {
+
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "stratum_getdifficulty\n"
+            "Show the current local diff of a stratum port.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("stratum_getdifficulty", "")
+            + HelpExampleRpc("stratum_getdifficulty", "")
+        );
+
+    UniValue obj(UniValue::VOBJ);
+
+    arith_uint256 aHashTarget = instance_of_cstratumparams.getTarget();
+    std::string strTarget = aHashTarget.GetHex();
+
+    CBlockIndex tmp_index;
+    tmp_index.nBits = arith_uint256(strTarget).GetCompact();
+    double kmd_diff = GetDifficulty(&tmp_index);
+    double ccminer_diff = ccminer::equi_stratum_target_to_diff(strTarget);
+
+    obj.push_back(Pair("target", strTarget));
+    obj.push_back(Pair("target_compact", strprintf("%08x",tmp_index.nBits)));
+    obj.push_back(Pair("kmd_diff", strprintf("%g",kmd_diff)));
+    obj.push_back(Pair("ccminer_diff", strprintf("%g", ccminer_diff)));
+
+    return obj;
+};
+
 static const CRPCCommand commands[] =
-{ //  category              name                      actor (function)         okSafeMode
-  //  --------------------- ------------------------  -----------------------  ----------
-    { "stratum",            "stratum_updatework",     &rpc_stratum_updatework, true },
+{ //  category              name                      actor (function)            okSafeMode
+  //  --------------------- ------------------------  -----------------------     ----------
+    { "stratum",            "stratum_updatework",     &rpc_stratum_updatework,    true },
+    { "stratum",            "stratum_getdifficulty",  &rpc_stratum_getdifficulty, true },
 };
 
 void RegisterStratumRPCCommands(CRPCTable &tableRPC)

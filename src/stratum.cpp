@@ -105,9 +105,8 @@ namespace { // better to use anonymous namespace for helper routines
                             currentHashTarget(defaultHashTarget), fAllowLowDiffShares(false), fCheckEquihashSolution(true),
                             fstdErrDebugOutput(false) { }
             ~CStratumParams() {}
-            void setTarget(const arith_uint256& diff) {
-                currentHashTarget = defaultHashTarget / diff;
-            }
+
+            void setTarget(const arith_uint256& target) { currentHashTarget = target; }
             arith_uint256 getTarget() { return currentHashTarget; }
 
             bool fAllowLowDiffShares;
@@ -396,6 +395,29 @@ namespace ccminer {
             //memset(target, 0xff, 6*sizeof(uint32_t));
             for (k = 0; k < 28 && ((uint8_t*)target)[k] == 0; k++)
                 ((uint8_t*)target)[k] = 0xff;
+        }
+    }
+
+    void kmd_diff_to_target_equi(uint32_t *target, double diff)
+    {
+        uint64_t m;
+        int k;
+
+        for (k = 6; k > 0 && diff > 1.0; k--)
+            diff /= (double)((uint64_t)0x100000000);
+        m = (uint64_t)((uint64_t)0x0f0f0f0f / diff);
+        if (m == 0 && k == 6)
+            memset(target, 0xff, 32);
+        else {
+            memset(target, 0, 32);
+            target[k + 1] = (uint32_t)(m >> 8);
+            target[k + 2] = (uint32_t)(m >> 40);
+            //memset(target, 0xff, 6*sizeof(uint32_t));
+
+            for (k = 0; k < 28 && ((uint8_t*)target)[k] == 0; k++)
+                ((uint8_t*)target)[k] = 0xff;
+            for (k = 0; k < 32; k++) ((uint8_t*)target)[31-k] = ((uint8_t*)target)[31-k-1];
+            ((uint8_t*)target)[0] = 0xff;
         }
     }
 
@@ -2069,8 +2091,91 @@ UniValue rpc_stratum_getdifficulty (const UniValue& params, bool fHelp, const CP
 
     obj.push_back(Pair("target", strTarget));
     obj.push_back(Pair("target_compact", strprintf("%08x",tmp_index.nBits)));
-    obj.push_back(Pair("kmd_diff", strprintf("%g",kmd_diff)));
-    obj.push_back(Pair("ccminer_diff", strprintf("%g", ccminer_diff)));
+    obj.push_back(Pair("kmd_diff_str", strprintf("%g",kmd_diff)));
+    obj.push_back(Pair("ccminer_diff_str", strprintf("%g", ccminer_diff)));
+    obj.push_back(Pair("kmd_diff", kmd_diff));
+    obj.push_back(Pair("ccminer_diff", ccminer_diff));
+
+    return obj;
+};
+
+UniValue rpc_stratum_setdifficulty (const UniValue& params, bool fHelp, const CPubKey& mypk) {
+
+    /*
+        https://bitcoin.stackexchange.com/questions/30467/what-are-the-equations-to-convert-between-bits-and-difficulty
+
+        There are 3 representations of the same thing (with varying degrees of precision) in Bitcoin:
+
+            - bits - unsigned int 32-bit
+            - target - unsigned int 256-bit
+            - difficulty - double-precision float (64-bit)
+
+        and 6 methods are necessary to convert between any two of these:
+
+            - bits -> target (SetCompact() in bitcoin/src/arith_uint256.cpp)
+            - bits -> difficulty (GetDifficulty() in bitcoin/src/rpc/blockchain.cpp)
+            - target -> bits (GetCompact() in bitcoin/src/arith_uint256.cpp)
+            - target -> difficulty (same as target -> bits -> difficulty)
+            - difficulty -> bits (not done in bitcoin/src) -> we will use kmd_diff_to_target_equi for that
+            - difficulty -> target (same as difficulty -> bits -> target)
+    */
+    if (fHelp || params.size() != 1)
+        throw std::runtime_error(
+            "stratum_setdifficulty\n"
+            "Set the diff on a stratum port.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("stratum_setdifficulty", "")
+            + HelpExampleRpc("stratum_setdifficulty", "")
+        );
+
+    // diff can be accepted in two ways: as a hex target or as a kmd_diff, both variants assume
+    // passing a string with 32 bytes hex target or string (!) with a double value, or double
+    // value as a double
+
+    double kmd_diff; // calculated value: diff_str -> kmd_diff
+    std::string diff_str = instance_of_cstratumparams.getTarget().ToString();
+
+    if (params[0].getType() == UniValue::VSTR) {
+        std::string param_str = params[0].get_str();
+        if (IsHex(param_str) && param_str.size() == 64) {
+            // hex target passed
+            diff_str = param_str;
+
+        } else {
+            if (ParseDouble(param_str, &kmd_diff)) {
+                // kmd diff as a str passed
+
+                // difficulty = difficulty_1_target / current_target
+                arith_uint256 target;
+                ccminer::kmd_diff_to_target_equi((uint32_t *)&target, kmd_diff);
+                diff_str = target.ToString();
+
+            } else
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid difficulty (not hex target, not kmd_diff)");
+        }
+    } else if (params[0].getType() == UniValue::VNUM) {
+        // kmd diff as a num passed
+        kmd_diff = params[0].get_real();
+
+        // difficulty = difficulty_1_target / current_target
+        arith_uint256 target;
+        ccminer::kmd_diff_to_target_equi((uint32_t *)&target, kmd_diff);
+        diff_str = target.ToString();
+
+    } else
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid difficulty");
+
+    instance_of_cstratumparams.setTarget(arith_uint256(diff_str));
+
+    UniValue obj(UniValue::VOBJ);
+    obj.push_back(Pair("target", diff_str));
+
+    CBlockIndex tmp_index;
+    tmp_index.nBits = arith_uint256(diff_str).GetCompact();
+
+    double new_kmd_diff = GetDifficulty(&tmp_index);
+    obj.push_back(Pair("kmd_diff_str", strprintf("%g",new_kmd_diff)));
+    obj.push_back(Pair("kmd_diff", new_kmd_diff));
 
     return obj;
 };
@@ -2080,6 +2185,7 @@ static const CRPCCommand commands[] =
   //  --------------------- ------------------------  -----------------------     ----------
     { "stratum",            "stratum_updatework",     &rpc_stratum_updatework,    true },
     { "stratum",            "stratum_getdifficulty",  &rpc_stratum_getdifficulty, true },
+    { "stratum",            "stratum_setdifficulty",  &rpc_stratum_setdifficulty, true },
 };
 
 void RegisterStratumRPCCommands(CRPCTable &tableRPC)

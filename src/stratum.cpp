@@ -2117,7 +2117,7 @@ UniValue rpc_stratum_getclientscount (const UniValue& params, bool fHelp, const 
 
     if (fHelp || params.size() != 0)
         throw std::runtime_error(
-            "rpc_stratum_getclientscount\n"
+            "stratum_getclientscount\n"
             "Show the the number of stratum clients.\n"
             "\nExamples:\n"
             + HelpExampleCli("stratum_getclientscount", "")

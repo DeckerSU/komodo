@@ -9,7 +9,7 @@
  * @file stratum.cpp
  * @author Decker
  * @brief Equihash Stratum implementation for Komodo (KMD) daemon
- * @version 0.1.3
+ * @version 0.1.4
  * @date 2021-06-19
  *
  * @copyright Copyright (c) 2021
@@ -117,10 +117,8 @@ namespace { // better to use anonymous namespace for helper routines
 
     } instance_of_cstratumparams;
 
-    // TODO: fix places which using CSubNet(...) constructors with numeric (/8, /16, /24, etc.) mask
-
     /** Check if a network address is allowed to access the Stratum server */
-    bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNetAddr& netaddr)
+    static bool ClientAllowed(const std::vector<CSubNet>& allowed_subnets, const CNetAddr& netaddr)
     {
         if (!netaddr.IsValid())
             return false;
@@ -130,123 +128,29 @@ namespace { // better to use anonymous namespace for helper routines
         return false;
     }
 
-    inline bool IsArgSet(const std::string& strArg)
-    {
-        return mapArgs.count(strArg);
-    }
-
-    inline std::vector<std::string> GetArgs(const std::string& strArg)
-    {
-        if (IsArgSet(strArg))
-            return mapMultiArgs.at(strArg);
-        return {};
-    }
-
-    /** Determine what addresses to bind to */
-    bool InitEndpointList(const std::string& which, int defaultPort, std::vector<std::pair<std::string, uint16_t> >& endpoints)
-    {
-        endpoints.clear();
-
-        // Determine what addresses to bind to
-        const std::string opt_allowip = "-" + which + "allowip";
-        const std::string opt_bind = "-" + which + "bind";
-        if (IsArgSet(opt_allowip)) { // Default to loopback if not allowing external IPs
-            endpoints.push_back(std::make_pair("::1", defaultPort));
-            endpoints.push_back(std::make_pair("127.0.0.1", defaultPort));
-            if (IsArgSet(opt_bind)) {
-                LogPrintf("WARNING: option %s was ignored because %s was not specified, refusing to allow everyone to connect\n", opt_bind, opt_allowip);
-            }
-        } else if (IsArgSet(opt_bind)) { // Specific bind address
-            for (const std::string& strRPCBind : GetArgs(opt_bind)) {
-                int port = defaultPort;
-                std::string host;
-                SplitHostPort(strRPCBind, port, host);
-                endpoints.push_back(std::make_pair(host, port));
-            }
-        } else { // No specific bind address specified, bind to any
-            endpoints.push_back(std::make_pair("::", defaultPort));
-            endpoints.push_back(std::make_pair("0.0.0.0", defaultPort));
-        }
-
-        return !endpoints.empty();
-    }
-
-    bool LookupHost(const char *pszName, CNetAddr& addr, bool fAllowLookup)
-    {
-        std::vector<CNetAddr> vIP;
-        LookupHost(pszName, vIP, 1, fAllowLookup);
-        if(vIP.empty())
-            return false;
-        addr = vIP.front();
-        return true;
-    }
-
-    bool LookupSubNet(const char* pszName, CSubNet& ret)
-    {
-        std::string strSubnet(pszName);
-        size_t slash = strSubnet.find_last_of('/');
-        std::vector<CNetAddr> vIP;
-
-        std::string strAddress = strSubnet.substr(0, slash);
-        if (LookupHost(strAddress.c_str(), vIP, 1, false))
-        {
-            CNetAddr network = vIP[0];
-            if (slash != strSubnet.npos)
-            {
-                std::string strNetmask = strSubnet.substr(slash + 1);
-                int32_t n;
-                // IPv4 addresses start at offset 12, and first 12 bytes must match, so just offset n
-                if (ParseInt32(strNetmask, &n)) { // If valid number, assume /24 syntax
-                    ret = CSubNet(network.ToString()); // TODO: should be CSubNet(const CNetAddr &addr, int32_t mask), where mask = n
-                    return ret.IsValid();
-                }
-                else // If not a valid number, try full netmask syntax
-                {
-                    // Never allow lookup for netmask
-                    if (LookupHost(strNetmask.c_str(), vIP, 1, false)) {
-                        //ret = CSubNet(network, vIP[0]);
-                        ret = CSubNet(network.ToString()); // TODO: should be CSubNet(const CNetAddr &addr, const CNetAddr &mask), where mask = vIP[0]
-                        return ret.IsValid();
-                    }
-                }
-            }
-            else
-            {
-                ret = CSubNet(network.ToString());
-                return ret.IsValid();
-            }
-        }
-        return false;
-    }
-
-    /** Initialize ACL list for HTTP server */
-    bool InitSubnetAllowList(const std::string which, std::vector<CSubNet>& allowed_subnets)
+    /** Initialize ACL list for Stratum server */
+    static bool InitStratumAllowList(std::vector<CSubNet>& allowed_subnets)
     {
         allowed_subnets.clear();
-        CNetAddr localv4;
-        CNetAddr localv6;
-        LookupHost("127.0.0.1", localv4, false);
-        LookupHost("::1", localv6, false);
-
-        allowed_subnets.push_back(CSubNet(localv4.ToString(), false));      // always allow IPv4 local subnet (TODO: should be CSubNet(const CNetAddr &addr, int32_t mask), where mask = 8)
-        allowed_subnets.push_back(CSubNet(localv6.ToString(), false));      // always allow IPv6 localhost
-
-        const std::string opt_allowip = "-" + which + "allowip";
-        for (const std::string& strAllow : GetArgs(opt_allowip)) {
-            CSubNet subnet;
-            LookupSubNet(strAllow.c_str(), subnet);
-            if (!subnet.IsValid()) {
-                uiInterface.ThreadSafeMessageBox(
-                    strprintf("Invalid %s subnet specification: %s. Valid are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24).", opt_allowip, strAllow),
-                    "", CClientUIInterface::MSG_ERROR);
-                return false;
+        allowed_subnets.push_back(CSubNet("127.0.0.0/8")); // always allow IPv4 local subnet
+        allowed_subnets.push_back(CSubNet("::1"));         // always allow IPv6 localhost
+        if (mapMultiArgs.count("-stratumallowip")) {
+            const std::vector<std::string>& vAllow = mapMultiArgs["-stratumallowip"];
+            for(const std::string& strAllow : vAllow) {
+                CSubNet subnet(strAllow);
+                if (!subnet.IsValid()) {
+                    uiInterface.ThreadSafeMessageBox(
+                        strprintf("Invalid -stratumallowip subnet specification: %s. Valid are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24).", strAllow),
+                        "", CClientUIInterface::MSG_ERROR);
+                    return false;
+                }
+                allowed_subnets.push_back(subnet);
             }
-            allowed_subnets.push_back(subnet);
         }
         return true;
     }
 
-    double GetDifficultyFromBits(uint32_t bits) {
+   double GetDifficultyFromBits(uint32_t bits) {
 
         uint32_t powLimit = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
         int nShift = (bits >> 24) & 0xff;
@@ -1632,38 +1536,44 @@ static void stratum_event_cb(bufferevent *bev, short what, void *ctx)
 /** Callback to accept a stratum connection. */
 static void stratum_accept_conn_cb(evconnlistener *listener, evutil_socket_t fd, sockaddr *address, int socklen, void *ctx)
 {
-    LOCK(cs_stratum);
     // Parse the return address
     CService from;
     from.SetSockAddr(address);
     // Early address-based allow check
 
-    // TODO: Enable restriction !
-    // if (!ClientAllowed(stratum_allow_subnets, from))
-    // {
-    //     evconnlistener_free(listener);
-    //     LogPrint("stratum", "Rejected connection from disallowed subnet: %s\n", from.ToString());
-    //     return;
-    // }
+    if (!ClientAllowed(stratum_allow_subnets, from))
+    {
+        // evconnlistener_free(listener);
 
-    // Should be the same as EventBase(), but let's get it the official way.
-    event_base *base = evconnlistener_get_base(listener);
-    // Create a buffer for sending/receiving from this connection.
-    bufferevent *bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
-    // Disable Nagle's algorithm, so that TCP packets are sent
-    // immediately, even if it results in a small packet.
-    int one = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&one, sizeof(one));
-    // Setup the read and event callbacks to handle receiving requests
-    // from the miner and error handling.  A write callback isn't
-    // needed because we're not sending enough data to fill buffers.
-    bufferevent_setcb(bev, stratum_read_cb, NULL, stratum_event_cb, (void*)listener);
-    // Enable bidirectional communication on the connection.
-    bufferevent_enable(bev, EV_READ|EV_WRITE);
-    // Record the connection state
-    subscriptions[bev] = StratumClient(listener, fd, bev, from);
-    // Log the connection.
-    LogPrint("stratum", "Accepted stratum connection from %s\n", from.ToString());
+        /*
+            Here we shouldn't free listener, bcz if somebody will connect on stratum port from
+            disallowed network -> future connections will be anavailable.
+        */
+        LogPrint("stratum", "Rejected connection from disallowed subnet: %s\n", from.ToString());
+        return;
+    }
+
+    {
+        LOCK(cs_stratum);
+        // Should be the same as EventBase(), but let's get it the official way.
+        event_base *base = evconnlistener_get_base(listener);
+        // Create a buffer for sending/receiving from this connection.
+        bufferevent *bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+        // Disable Nagle's algorithm, so that TCP packets are sent
+        // immediately, even if it results in a small packet.
+        int one = 1;
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&one, sizeof(one));
+        // Setup the read and event callbacks to handle receiving requests
+        // from the miner and error handling.  A write callback isn't
+        // needed because we're not sending enough data to fill buffers.
+        bufferevent_setcb(bev, stratum_read_cb, NULL, stratum_event_cb, (void*)listener);
+        // Enable bidirectional communication on the connection.
+        bufferevent_enable(bev, EV_READ|EV_WRITE);
+        // Record the connection state
+        subscriptions[bev] = StratumClient(listener, fd, bev, from);
+        // Log the connection.
+        LogPrint("stratum", "Accepted stratum connection from %s\n", from.ToString());
+    }
 }
 
 /** Setup the stratum connection listening services */
@@ -1674,15 +1584,37 @@ static bool StratumBindAddresses(event_base* base)
     std::vector<std::pair<std::string, uint16_t> > endpoints;
 
     // Determine what addresses to bind to
-    if (!InitEndpointList("stratum", defaultPort, endpoints))
-        return false;
+    if (!mapArgs.count("-stratumallowip")) { // Default to loopback if not allowing external IPs
+        endpoints.push_back(std::make_pair("::1", defaultPort));
+        endpoints.push_back(std::make_pair("127.0.0.1", defaultPort));
+        if (mapArgs.count("-stratumbind")) {
+            LogPrintf("WARNING: option -stratumbind was ignored because -stratumallowip was not specified, refusing to allow everyone to connect\n");
+        }
+    } else if (mapArgs.count("-stratumbind")) { // Specific bind address
+        const std::vector<std::string>& vbind = mapMultiArgs["-stratumbind"];
+        for (std::vector<std::string>::const_iterator i = vbind.begin(); i != vbind.end(); ++i) {
+            int port = defaultPort;
+            std::string host;
+            SplitHostPort(*i, port, host);
+            endpoints.push_back(std::make_pair(host, port));
+        }
+    } else { // No specific bind address specified, bind to any
+        endpoints.push_back(std::make_pair("::", defaultPort));
+        endpoints.push_back(std::make_pair("0.0.0.0", defaultPort));
+    }
 
     // Bind each addresses
     for (const auto& endpoint : endpoints) {
         LogPrint("stratum", "Binding stratum on address %s port %i\n", endpoint.first, endpoint.second);
         // Use CService to translate string -> sockaddr
         CNetAddr netaddr;
-        LookupHost(endpoint.first.c_str(), netaddr, true);
+        std::vector<CNetAddr> vIP;
+
+        LookupHost(endpoint.first.c_str(), vIP, 1, true);
+        assert(vIP.size() >= 1);
+
+        netaddr = vIP[0];
+
         CService socket(netaddr, endpoint.second);
         union {
             sockaddr     ipv4;
@@ -1896,16 +1828,15 @@ bool InitStratumServer()
 {
     LOCK(cs_stratum);
 
-    if (!InitSubnetAllowList("stratum", stratum_allow_subnets)) {
+    if (!InitStratumAllowList(stratum_allow_subnets)) {
         LogPrint("stratum", "Unable to bind stratum server to an endpoint.\n");
         return false;
     }
 
     std::string strAllowed;
-    for (const auto& subnet : stratum_allow_subnets) {
+    for(const CSubNet& subnet : stratum_allow_subnets)
         strAllowed += subnet.ToString() + " ";
-    }
-    LogPrint("stratum", "Allowing stratum connections from: %s\n", strAllowed);
+    LogPrint("stratum", "Allowing Stratum connections from: %s\n", strAllowed);
 
     event_base* base = EventBase();
     if (!base) {

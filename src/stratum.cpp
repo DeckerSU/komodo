@@ -2180,12 +2180,30 @@ UniValue rpc_stratum_setdifficulty (const UniValue& params, bool fHelp, const CP
     return obj;
 };
 
+UniValue rpc_stratum_getclientscount (const UniValue& params, bool fHelp, const CPubKey& mypk) {
+
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "rpc_stratum_getclientscount\n"
+            "Show the the number of stratum clients.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("stratum_getclientscount", "")
+            + HelpExampleRpc("stratum_getclientscount", "")
+        );
+
+    UniValue obj(UniValue::VOBJ);
+    obj.push_back(Pair("total", subscriptions.size()));
+
+    return obj;
+};
+
 static const CRPCCommand commands[] =
-{ //  category              name                      actor (function)            okSafeMode
-  //  --------------------- ------------------------  -----------------------     ----------
-    { "stratum",            "stratum_updatework",     &rpc_stratum_updatework,    true },
-    { "stratum",            "stratum_getdifficulty",  &rpc_stratum_getdifficulty, true },
-    { "stratum",            "stratum_setdifficulty",  &rpc_stratum_setdifficulty, true },
+{ //  category              name                       actor (function)              okSafeMode
+  //  --------------------- ------------------------   -----------------------       ----------
+    { "stratum",            "stratum_updatework",      &rpc_stratum_updatework,      true },
+    { "stratum",            "stratum_getdifficulty",   &rpc_stratum_getdifficulty,   true },
+    { "stratum",            "stratum_setdifficulty",   &rpc_stratum_setdifficulty,   true },
+    { "stratum",            "stratum_getclientscount", &rpc_stratum_getclientscount, true },
 };
 
 void RegisterStratumRPCCommands(CRPCTable &tableRPC)

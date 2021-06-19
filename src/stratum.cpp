@@ -1735,15 +1735,16 @@ void BlockWatcher()
 
         if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
 
-        LOCK(cs_stratum);
-
         if (g_shutdown) {
             break;
         }
 
         // Either new block, or updated transactions.  Either way,
         // send updated work to miners.
-        for (auto& subscription : subscriptions) {
+        {
+            LOCK(cs_stratum);
+            for (auto& subscription : subscriptions) {
+
             bufferevent* bev = subscription.first;
 
             if (!bev)
@@ -1788,6 +1789,8 @@ void BlockWatcher()
                 LogPrint("stratum", "Sending stratum work unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
             }
         }
+        }
+
         if (instance_of_cstratumparams.fstdErrDebugOutput) std::cerr << DateTimeStrPrecise() << __func__ << ": " << __FILE__ << "," << __LINE__ << " time = " << boost::get_system_time() << " checktxtime = " << checktxtime << std::endl;
     }
 }
@@ -1944,7 +1947,7 @@ void StopStratumServer()
 }
 
 /* RPC */
-UniValue  rpc_stratum_updatework(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue rpc_stratum_updatework(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 0)
         throw std::runtime_error(
@@ -1954,7 +1957,91 @@ UniValue  rpc_stratum_updatework(const UniValue& params, bool fHelp, const CPubK
             + HelpExampleCli("stratum_updatework", "")
             + HelpExampleRpc("stratum_updatework", "")
         );
+
     UniValue obj(UniValue::VOBJ);
+    UniValue json_clients(UniValue::VARR);
+    uint64_t skipped = 0;
+
+    // send updated work to miners
+
+    // if (cs_stratum.try_lock())
+    {
+        LOCK(cs_stratum);
+        for (auto& subscription : subscriptions) {
+
+            bufferevent* bev = subscription.first;
+
+            if (!bev)
+                continue;
+            evbuffer *output = bufferevent_get_output(bev);
+            if (!output)
+                continue;
+            evbuffer *input = bufferevent_get_input(bev);
+            if (!input)
+                continue;
+
+            StratumClient& client = subscription.second;
+
+            if (instance_of_cstratumparams.fstdErrDebugOutput) {
+                std::cerr << __func__ << ": " << __FILE__ << "," << __LINE__ << std::endl <<
+                "client.m_authorized = " << client.m_authorized << std::endl <<
+                "client.m_aux_addr.size() = " << client.m_aux_addr.size() << std::endl <<
+                "client.m_last_tip = " << strprintf("%p", client.m_last_tip) << std::endl <<
+                (client.m_last_tip ? strprintf("client.m_last_tip->GetHeight() = %d", client.m_last_tip->GetHeight()) : "") << std::endl <<
+                "chainActive.Tip()->GetHeight() = " << chainActive.Tip()->GetHeight() << std::endl <<
+                "client.m_supports_extranonce = " << client.m_supports_extranonce << std::endl <<
+                "client.m_send_work = " << client.m_send_work << std::endl <<
+                std::endl;
+            }
+
+            // Ignore clients that aren't authorized yet.
+            if (!client.m_authorized && client.m_aux_addr.empty()) {
+                continue;
+            }
+
+            if ( (client.m_last_tip && client.m_last_tip->GetHeight() == chainActive.Tip()->GetHeight()) || (!client.m_last_tip) )
+            {
+                mempool.AddTransactionsUpdated(1);
+                client.m_last_tip = (client.m_last_tip ? nullptr : chainActive.Tip());
+                cvBlockChange.notify_all();
+            }
+
+            std::string data = "";
+
+            try {
+                data = GetWorkUnit(client);
+
+                UniValue json_client(UniValue::VOBJ);
+                json_client.push_back(Pair("addr", client.m_addr.ToString()));
+                json_client.push_back(Pair("service", client.m_from.ToString()));
+
+                json_clients.push_back(json_client);
+
+            } catch (const UniValue& objError) {
+                data = JSONRPCReply(NullUniValue, objError, NullUniValue);
+                skipped++;
+            } catch (const std::exception& e) {
+                // Some sort of error.  Ignore.
+                std::string msg = strprintf("Error generating updated work for stratum client: %s", e.what());
+                LogPrint("stratum", "%s\n", msg);
+                data = JSONRPCReply(NullUniValue, JSONRPCError(RPC_INTERNAL_ERROR, msg), NullUniValue);
+                skipped++;
+            }
+
+            assert(output);
+            if (evbuffer_add(output, data.data(), data.size())) {
+                LogPrint("stratum", "Sending stratum work unit failed. (Reason: %d, '%s')\n", errno, evutil_socket_error_to_string(errno));
+            }
+        }
+    }
+    // else {
+    //     throw JSONRPCError(RPC_INTERNAL_ERROR, "Something went wrong, plz try again!");
+    // }
+
+    obj.push_back(Pair("clients", json_clients));
+    obj.push_back(Pair("updated", json_clients.size()));
+    obj.push_back(Pair("skipped", skipped));
+    obj.push_back(Pair("total", subscriptions.size()));
 
     return obj;
 }

@@ -4,7 +4,7 @@ $(package)_dependencies=openssl
 $(package)_download_path=https://curl.haxx.se/download
 $(package)_file_name=curl-$($(package)_version).tar.gz
 $(package)_sha256_hash=5f85c4d891ccb14d6c3c701da3010c91c6570c3419391d485d95235253d837d7
-$(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-unknown-linux-gnu
+$(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix)
 $(package)_config_opts_mingw32=--enable-mingw --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
 $(package)_config_opts_darwin=--disable-shared --enable-static --prefix=$(host_prefix)
 $(package)_cflags_darwin=-mmacosx-version-min=10.9
@@ -17,18 +17,41 @@ endef
 endif
 
 ifeq ($(build_os),linux)
-define $(package)_set_vars
-  $(package)_config_env=LD_LIBRARY_PATH="$(host_prefix)/lib" PKG_CONFIG_LIBDIR="$(host_prefix)/lib/pkgconfig" CPPFLAGS="-I$(host_prefix)/include" LDFLAGS="-L$(host_prefix)/lib"
-endef
+ifneq ($(host_arch),aarch64)
+  # linux x86_64
+  define $(package)_set_vars
+    $(package)_config_opts+=--host=x86_64-unknown-linux-gnu
+  endef
+  define $(package)_config_cmds
+    echo '=== config (1) for $(package):' && \
+    echo '$($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)' && \
+    echo '=== ' && \
+    $($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)
+  endef
+else
+  # cross compile for aarch64
+  define $(package)_set_vars
+    $(package)_config_env=LD_LIBRARY_PATH="$(host_prefix)/lib" PKG_CONFIG_LIBDIR="$(host_prefix)/lib/pkgconfig" CPPFLAGS="-I$(host_prefix)/include -fPIC" LDFLAGS="-L$(host_prefix)/lib"
+    $(package)_config_opts+=--host=aarch64-linux-gnu --disable-tls-srp
+  endef
+  define $(package)_config_cmds
+    echo '=== config (2) for $(package):' && \
+    echo '$($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)' && \
+    echo '=== ' && \
+    $($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts); \
+        sed -i.old "/.*HAVE_RAND_EGD.*/d" ./lib/curl_config.h; \
+        sed -i.old "/.*HAVE_BUILTIN_AVAILABLE.*/d" ./lib/curl_config.h 
+  endef
 endif
-
-
-define $(package)_config_cmds
-  echo '=== config for $(package):' && \
-  echo '$($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)' && \
-  echo '=== ' && \
-  $($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts) 
-endef
+else
+  # not linux
+  define $(package)_config_cmds
+    echo '=== config (3) for $(package):' && \
+    echo '$($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)' && \
+    echo '=== ' && \
+    $($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)
+  endef
+endif
 
 ifeq ($(build_os),darwin)
 define $(package)_build_cmds

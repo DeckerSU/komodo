@@ -14,6 +14,9 @@
  ******************************************************************************/
 #pragma once
 
+//#ifndef KOMODO_CURVE25519_H
+//#define KOMODO_CURVE25519_H
+
 #include <stdint.h>
 #include <memory.h>
 #include <string.h>
@@ -56,7 +59,7 @@ void store_limb(uint8_t *out,uint64_t in);
 // Take a little-endian, 32-byte number and expand it into polynomial form
 bits320 fexpand(bits256 basepoint);
 
-#if __amd64__
+#if defined(__amd64__)  || defined(__aarch64__)
 // donna: special gcc mode for 128-bit integers. It's implemented on 64-bit platforms only as far as I know.
 typedef unsigned uint128_t __attribute__((mode(TI)));
 
@@ -771,3 +774,5 @@ uint256 komodo_kvprivkey(uint256 *pubkeyp,char *passphrase);
 uint256 komodo_kvsig(uint8_t *buf,int32_t len,uint256 _privkey);
 
 int32_t komodo_kvsigverify(uint8_t *buf,int32_t len,uint256 _pubkey,uint256 sig);
+
+//#endif

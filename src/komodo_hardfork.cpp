@@ -12,8 +12,8 @@ const int32_t nS5HardforkHeight = 2437300;  //dPoW Season 5 Monday, June 14th, 2
 const uint32_t nS6Timestamp = 1656077853;   // dPoW Season 6, Fri Jun 24 2022 13:37:33 GMT+0000
 const int32_t nS6HardforkHeight = 2963330;  // dPoW Season 6, Fri Jun 24 2022
 
-const uint32_t nS7Timestamp = 1688132253;   // dPoW Season 7, Fri Jun 30 2023 13:37:33 GMT+0000
-const int32_t nS7HardforkHeight = 3484958;  // dPoW Season 7, Fri Jun 30 2023
+const uint32_t nS7Timestamp = 1685750400;   // *** s7hfsim ***,
+const int32_t nS7HardforkHeight = 3446686;  // *** s7hfsim ***, Sat Jun 03 2023 00:00:00 GMT+0000
 
 // Era array of pubkeys. Add extra seasons to bottom as requried, after adding appropriate info above. 
 const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
@@ -486,69 +486,69 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
    },
    {
         // Season 7
-        {"blackice_DEV", "03955c7999538cee313bf196a7df59db208c651f6a5a1b0eed94732ba753b4f3f4"}, // 0
-        {"blackice_AR", "02bbc5518d27918d77c46b4e3ad0b9df936df520646527ab4c2f206544a2b03967"},
-        {"blackice_EU", "02340bf4749a392865b0ddaf37e652195e740c7538aeac87f7a51b8bf2dcdc24ac"},
-        {"blackice_NA", "035baa12331ad6c284d5f1b76527c1d6c5eb15a74b9ba369e5d46aefcc9c120938"},
-        {"alien_NA", "03bea1ac333b95c8669ec091907ea8713cae26f74b9e886e13593400e21c4d30a8"},
-        {"alien_EU", "03bb749e337b9074465fa28e757b5aa92cb1f0fea1a39589bca91a602834d443cd"},
-        {"alien_SH", "03911a60395801082194b6834244fa78a3c30ff3e888667498e157b4aa80b0a65f"},
-        {"alienx_NA", "02f0b3ef87629509441b1ae95f28108f258a81910e483b90e0496205e24e7069b8"},
-        {"alright_EU", "0364f2beba6a91ca88a92e8bf709dc21b444587183256f651a30ad1b932242d4db"},
-        {"alright_DEV", "028548847b3bbccff37c9b47bc4154183304902773d514b792ec2adc91e600e3b9"},
-        {"artem.pikulin_AR", "026a8ed1e4eeeb023cfb8e003e1c1de6a2b771f37e112745ffb8b6e375a9cbfdec"}, // 10
-        {"batman_AR", "02cc9eb0281628256a743570c57b2cedd54333ec79a97a681207b240cab84119fe"},
-        {"blackice2_AR", "03d224790d17b881db560759cc9cc73fe5c865136a88af471ea156b7eb6d88ce32"},
-        {"ca333_EU", "0335492a24c73844b29b8c724e709b8082424e6296baa1fab4ef86c73f233ccf27"},
-        {"caglarkaya_EU", "035667a7e5594095f7b3d392e61da8dd7d0dda610bf8731e7831993a8201d1feea"},
-        {"chmex_AR", "036c856ea778ea105b93c0be187004d4e51161eda32888aa307b8f72d490884005"},
-        {"chmex_EU", "025b7209ba37df8d9695a23ea706ea2594863ab09055ca6bf485855937f3321d1d"},
-        {"chmex_NA", "030c2528c29d5328243c910277e3d74aa77c9b4e145308007d2b11550731591dbe"},
-        {"chmex_SH", "02698305eb3c27a2c724efd2152f9250739355116f201656c34b83aac2d3aebd19"},
-        {"chmex2_SH", "02d27ed1cddfbaff9e47865e7df0165457e8f075f70bbea8c0498598ccf494555d"},
-        {"cipi_AR", "033ae024cdb748e083406a2e20037017a1292079ad6a8161ae5b43f398724fea74"}, // 20
-        {"cipi_EU", "03d6e1f3a693b5d69049791005d7cb64c259a1ad85833f5a9c545d4fee29905009"},
-        {"cipi_NA", "036cc1d7476e4260601927be0fc8b748ae68d8fec8f5c498f71569a01bd92046c5"},
-        {"colmapol_EU", "020c63078b5f5d27183de6f2bbae9bfe3fc57e017faf89b7d566bb947a92a2e40d"},
-        {"computergenie_EU", "03a8c071036228e0900e0171f616ce1a58f0a761193551d68c4c20e70534f2e183"},
-        {"computergenie_NA", "03a78ae070a5e9e935112cf7ea8293f18950f1011694ea0260799e8762c8a6f0a4"},
-        {"computergenie2_NA", "03e1472f963ba84f3d797015811efbb7ded58cb0de69da463367f4e3281b259fc8"},
-        {"dimxy_AR", "02689d0b77b1e8e8c93a102d8b689fd08179164d70e2dd585543c3896a0916e6a1"},
-        {"dimxy_DEV", "039a01cd626d5efbe7fd05a59d8e5fced53bacac589192278f9b00ad31654b6956"},
-        {"emmaccen_DEV", "02e3672b0ebcc9a524508651cf91c8752880ac2fff760d9373ddab59702b933058"},
-        {"fediakash_AR", "027dfe5403f8870fb0e1b94a2b4204373b31ea73179ba500a88dd56d22855cd03b"}, // 30
-        {"gcharang_AR", "030de3d833ba049da08231ca6b622c77c7f96b26269963291d9604706bb94031a5"},
-        {"gcharang_SH", "02cb445948bf0d89f8d61102e12a5ee6e98be61ac7c2cb9ba435219ea9db967117"},
-        {"gcharang_DEV", "033b82b5791c65477dd11095cf33332013df6d2bcb7aa06a6dae5f7b22b6959b0b"},
-        {"kmdude_SH", "02116774b25226d0b99f70a24f55c5ce17a7af6d3522071369c233157ecb27b82a"},
-        {"marmara_AR", "0335ab9e59d602df5580b964b6451d02cd9cc243ddf01b065db84375488df9f53c"},
-        {"marmara_EU", "0234e40800500370d43979586ee2cec2e777a0368d10c682e78bca30fd1630c18d"},
-        {"mcrypt_SH", "025faab3cc2e83bf7dad6a9463cbff86c08800e937942126f258cf219bc2320043"},
-        {"nodeone_NA", "03f9dd0484e81174fd50775cb9099691c7d140ff00c0f088847e38dc87da67eb9b"},
-        {"nodeone2_NA", "0397fa321960fda64b86330efaefeba56a7ab0ff4b7f82869b0115ad8bc1c432b0"},
-        {"ozkanonur_NA", "02be4ac61cf534b0fb98568ec539ee9e34c5104088f94f21cee2945d37d88373da"}, // 40
-        {"pbca26_NA", "021e362556ab07d4f1f75a0adce9709ad87ce1a51da679947b0ad4a6b651e9769b"},
-        {"pbca26_SH", "035a9784047f030e00d886dd91c07c82846702595650a2f1de67a8d85dc077d712"},
-        {"phit_SH", "02a9cef2141fb2af24349c1eea20f5fa8f5dba2835723778d19b23353ddcd877b1"},
-        {"ptyx_SH", "0270dbba1449ab2e76109b147cbbea794f103a625d14743bf9e2aaa74f98e6787f"},
-        {"shamardy_SH", "026d378de09ba51d8f56be52bc8d02f5e20bae843406e23686047b76c72412a7b3"},
-        {"sheeba_SH", "03e6578015b7f0ab78a486070435031fff7bae11256ca6a9f3d358ab03029737cb"},
-        {"sheeba2_SH", "02f016347d952a06f1121bc9445b162d0ba921c7317f6b60211179c1cddef0db57"},
-        {"smdmitry_AR", "022a2a45979a6631a25e4c96469423de720a2f4c849548957c35a35c91041ee7ac"},
-        {"smdmitry_EU", "02eb3aad81778f8d6f7e5295c44ca224e5c812f5e43fc1e9ce4ebafc23324183c9"},
-        {"smdmitry_SH", "02d01cd6b87cbf5a9795c06968f0d169168c1be0d82cfeb79958b11ae2c30316c1"}, // 50
-        {"smdmitry2_AR", "026e33b213be94fa7c05c781cb1d2fb381e4c4ef6aad40d6a67f0a8ad573d92efe"},
-        {"strob_SH", "025ceac4256cef83ca4b110f837a71d70a5a977ecfdf807335e00bc78b560d451a"},
-        {"tonyl_AR", "02b10141bf59b192c97f08273547d0cebff7466e8865a09f0da082e52b62de3866"},
-        {"tonyl_DEV", "02f92a2592bd791fc09c030401b7d12016a4f878d7bfae6d58e547cf42c717a79a"},
-        {"van_EU", "03af7f8c82f20671ca1978116353839d3e501523e379bfb52b1e05d7816bb5812f"},
-        {"webworker01_EU", "02ad970d95fdaa296a0ab13b5733216e116030d9147ff33de20f22cb4e75b5073d"},
-        {"webworker01_NA", "0324791c836fae78e2a698c53e58e671917cf66b145e9af83d431815a5002fb9a0"},
-        {"who-biz_NA", "02f91a6772fe1a376e2bbe4b190008e3f878d40a8eaf92c65f1a7680b6b42ea47b"},
-        {"yurri-khi_DEV", "03e57c7341d2c8a3be62e1caaa28978d76a8277dea7bb484fdd8c55dc05e4e4e93"},
-        {"dragonhound_AR", "030a72f1a15f67624aea55743c5b777bdd55362596add77b544ee2e582bdebf0c7"}, // 60
-        {"dragonhound_EU", "0286d7af8583e18127bd1f45730916b4f48ae3e0c90181b2745174b91b76c6e28b"},
-        {"dragonhound_NA", "0306476ea5fb67aec667172a9bb30646dbff195b84c30ac958175af9b475987802"},
-        {"dragonhound_DEV", "02f9a7b49282885cd03969f1f5478287497bc8edfceee9eac676053c107c5fcdaf"}
+        {"s7hfsim_00", "02134dbf1ab2c804524e48e821282c96613468238bc64beafa5422f2e2bbd23dee"}, // RC292Jj8rNFxLeuDRBqsQX4hLLCLp4qY8T
+        {"s7hfsim_01", "03951c3d54450ac35ea43dad32253264882ca93dc7c7ebdbc780fdf7c64f9ec680"}, // RCZGpKPbjeN2AVydWorEgkHbfopPDhKjXn
+        {"s7hfsim_02", "03b66ab0b7c17e5b6967bb3aa90b59ffa0a9df4ff57ad93f8109db839d99ca0dfe"}, // REQ5e44aix2m7F2HYMPg2Xr7XfoqDBzN6R
+        {"s7hfsim_03", "0390e756781339153547f462d49524d9ad457d49c2b260dd9ebd49682974d83625"}, // R9feXGqLc4cAGu1ZJrLF8pevXfXU9LZsSz
+        {"s7hfsim_04", "029ef151c6ba22e510fb3cdab06f372ab69ec1b932a4de121861f9984a34063702"}, // RP2frRxvxPJPrYQgVkWqePepsHehbD69gZ
+        {"s7hfsim_05", "03ccceb39147a22b313906db0b7197a1ca4109234773f502eb1b01334eec467bfa"}, // RSM9iDyUryC4JMGXRgBkkEoWqwt6MhBEM6
+        {"s7hfsim_06", "02afd431bfe25022dc0a4b20af26606ad4504a6904cd0ebadbdf8793bc5429d54d"}, // RTYCza64Buiw1KMQtgsSbbmmbPacdciMNL
+        {"s7hfsim_07", "0382f1ab40ff19cfdfbc2c27a78003edc1d7b0e5ff97693f6fcb1734bf9c9e5082"}, // RXnQkwqJzwEivbXzsM5iWbgdVigi1Uec9B
+        {"s7hfsim_08", "03e6b2d0f076e9c91d31ca78b55f67ea1471db449f263d8f17b5fc48569f1c1e60"}, // RRaPNCXSNxm9ssBmsmZtY2pEGHfSDwYQ3j
+        {"s7hfsim_09", "02546620d3bb96ec8b2639f364db7da53038d1b29b87a0eff85605645ff63cad52"}, // RS9M9m7J2LFUYC8V5uzMbXCe8bhxs4w7md
+        {"s7hfsim_10", "031a6d46e73559cc75cbe5045880b0e25948874fe4b17c6518a2af927306c5662e"}, // RSEVVXm5UaXFsGEW3V8jPCgDuThQDb3X43
+        {"s7hfsim_11", "0230ac068147ac6bae893978a8157dec000fcb2d727c1110662c7f5c9b1aa48453"}, // RS5kwDVLhstDBfnNtjsU2zt2xNxa9pgvVv
+        {"s7hfsim_12", "02f588063b6b084826c6ad4656c54ac54204a88d0b7cad62772ee657819c320271"}, // REdCKEQBcoECEtuUegydZr2RjTMoRFye1r
+        {"s7hfsim_13", "031800f191e0d123e54997b2354c5eee85f449f60d1543506839fedce7831c57fe"}, // RGVXsQS9cYJ9M4gPYFDEGCxoeERMaewnuM
+        {"s7hfsim_14", "033c3249299996336e852f3204c20e2d41d33c422d35322e2f4f0a00354c5b8279"}, // RWXiXyJag1it3RsgxjGFVxqsxkeJ5t5hmb
+        {"s7hfsim_15", "03cb471168432546714bbd753e58f2480c0676902b74eb5a90a237f434ae7f14c6"}, // RHSeSmgsK1SLC8Db3fUQBvytMVNaGr4poL
+        {"s7hfsim_16", "03ac5af0b04f1b215d7575a70368c840663008b23f5c3b8363a53e47b7fb6d1fd6"}, // RQpjhivfiW6BT59D8LL4A3MpuuTpXPBMAZ
+        {"s7hfsim_17", "03fc6ffbcc0bf0a0057c9179c83e34d066913caa36830c39d3aa6af4e176c5944a"}, // RJUZBfBQapbuBm5VBHS97dT9ia6Z9W5eEM
+        {"s7hfsim_18", "02c98ae4a35a15967aa1da4d340e4e108d1bcfd081b0e17cba6229c4c669890192"}, // RLQKNCo1UxWZVJud8V5wX8pzNnT6cq8Dd2
+        {"s7hfsim_19", "0364d5d7170d4739a44ca4b75fbd142fb813015e47945d935c2597ea8fa0c3cf0a"}, // RQRQsoiY4jZ3hKaiPKMz9Ywiwu4Cr9fms5
+        {"s7hfsim_20", "03c148d0931a9d7a5f676e993c8eb9ae12983baa2928b9ff8c7e41472c27c88997"}, // RQJjDY5DJqHZcaPeJmbG7HzBMcmhABk5hs
+        {"s7hfsim_21", "037b09f3a8dcb81c3db296e405530ae4e086f2b03f099b19e6c2d7c89b5e6e0efe"}, // RWr9C6xjQsoe86WShkzQkQmPaStoma6Tpg
+        {"s7hfsim_22", "03b1c6c19ec8a5026ff74dd2da01f7f9a048ad4c14dc619a3c6a49b87fd44fb4f8"}, // RCrctb3UP71HWBaUaeRKF13CeXXjXze4Kj
+        {"s7hfsim_23", "02dbeb1fe3ad1b9c4e7f536b8a997e789013b25cbce0d6717d85f264211ce339ef"}, // RFTd57GvNQbkuHRqf47J4bucwrnu5VoVEh
+        {"s7hfsim_24", "03b8326ec8c09d38a30f4870e8f15baa58a3d6fff695c197912ead37a0cd0fb485"}, // RQhYiTNjZ64QE97xHCJgxTe7N5CoZm2bGd
+        {"s7hfsim_25", "03d76b9c81511b66fd2e37964edc69a150722007dd9a1a91e874cf55fd4a68aa74"}, // RDknWhyLCy7ipx8uxzxySdUNjv8V2XfVNf
+        {"s7hfsim_26", "02933841587d51b801f63a88d4a9e0bf9684ffc29a57d71c4f004e48a6ce0f41f7"}, // RH1tQA4nyrDu3ewz1ZQQmWWktMAjnU71tX
+        {"s7hfsim_27", "0227f1d50668014230aa697f646bd90e9bd995784e327fdf1d5ef93fd15def059b"}, // RWeUfVNrFXUjARSwMffWEUhg8NJkqRFjtx
+        {"s7hfsim_28", "0392b2001315dd3a942d015c5f4b6c3f13029eaaf58835035a399fa70c81dbff82"}, // RJUYd64cPuKWLNSbiUu557cnit2o1Dj727
+        {"s7hfsim_29", "0348c2d47587605ae43f029056cc7e943845a238c376790eb8afa1277e09348986"}, // RFWk3mrnhCF1oPz6JZ6qfH2LZxXqdNiY57
+        {"s7hfsim_30", "0214badde187ea3f49cf1e1615e6c4a5bf1a55f4402261be3b4a3d6264e803a54f"}, // RMr7fcWAnD8SSwaGpvZXqWYHwvhYA44Ac6
+        {"s7hfsim_31", "03837bd2d381b6a26330e953a6330af39b5a2127eab3718bc376a0402a710ad4a5"}, // RNaqjDUM9pc74h7iazQdgiFBsdsZV4pKCs
+        {"s7hfsim_32", "02f477d59a31213d70cb42d2d83c97ef33cd2c9eb11e9ad88ab3b0d344363f0407"}, // REhq3LLYmG98FdHjiMc2GcWZQhZ4wQNnbB
+        {"s7hfsim_33", "0325156075450732a67772c2f25e586e4b5f520a692486ee893f7e81fd34a6ade9"}, // RWMLQ6hbEr5X7meqj53D4nh9FKrVHsgUW4
+        {"s7hfsim_34", "02d59e2edd72008c29433714178fcc65c992bd46853f9dd23fc0408c66e4e31ac0"}, // RMTiSzQ8R5Sv3nRi2PZSVfAVpJmCeyh3Mj
+        {"s7hfsim_35", "0387ee732f8b1758baf1d7439797646105467989a86eae2789d45b2b838536b22b"}, // RAbbRLyKCTa33zzZtDSDnuKzAiauyCZ52o
+        {"s7hfsim_36", "02f9f3297d28a15c6a0607522d13e6a6f309b89cac09e887ee43faf47d3bb87707"}, // RSPVJjpg11jbyd72geaPobHjDGMaJX47Wp
+        {"s7hfsim_37", "038a88a8ac7b536749a6143476ab907320d9395fe802279607eb9289371a29d39f"}, // RWwLpcyQEvGpuhxXTuqdGJp5y7564g5VJS
+        {"s7hfsim_38", "02cfe76076ca744a45cd2340dfee32deae33012b2dcc06d1a6d46bc5bd58701d60"}, // R9JYKGCNVGfYmTVbmDzWiHz7tFMuCX21Me
+        {"s7hfsim_39", "0342843c127b4687e5f6e5c106f9815caa3b6d32e2a7868ff67840c6243cc2bd4e"}, // RHHqeCCMKomj7qWgiuSGzq4FP4bEzSi6Mc
+        {"s7hfsim_40", "03fcbd09c71fed9af044e90d04927e0c0f8d33687c3ca389ae36a089a16262648a"}, // RHq5Y3cfbnqkrPkuiwqQXv5s4WT3nZm2ur
+        {"s7hfsim_41", "02fb7fb379a63ecc1b0edd4d81988ad00c00ee9c349c1e051202b019289873f761"}, // REQNXr2Yg62Wm4jff9oZefiqehAwTTdAXc
+        {"s7hfsim_42", "02ca9477bb4382095f84df0cbd393cce8dc8f0a9ef0e586b745ceb783990aa833f"}, // RVRaA9yAaWmX2xkpZRjvcaemfNH4xXamx1
+        {"s7hfsim_43", "039cb7470d975dd066dd7a624463b156091d09fad201f5bb2b21a544cdfe759e0a"}, // RWz7EJGc9mVFS1ycGTkrwwktiaHMF9CuzK
+        {"s7hfsim_44", "037a4449d8a678623a4084a69984922d761a624d233bdf8e5d8f1afbe45836b3d4"}, // RNTgEtcByUCjxT2RdEY2S8yMcH7xMZ2cg1
+        {"s7hfsim_45", "02605b41dcbbbd03bf75dab545af4482542cc7f7c07c5cc85407c1392e83cfaa1e"}, // RFLhbAYwabDLtcawagNtJ9RXs81GNf7ebL
+        {"s7hfsim_46", "03b02ae949f48f0d3376b8be89dca7baada44548c8544c654ea7e910e18f7321af"}, // RU77hfKPBUuptaYgiNrNcNPtC88CdG3KwT
+        {"s7hfsim_47", "03a06567f1fe2233f6973aba09cd85a573732a5eff25b6366e47c136f2d87e034b"}, // RXZ56KCQfMz66vsa1L43hv38GyP5Vx5dCn
+        {"s7hfsim_48", "0244c523b5feead515a7f8cb102c9cf1b7f6471bab465a6958793f9e94e75089be"}, // RNmuBLwHzbXLuNt9sgin8B3jsWDSTK4adj
+        {"s7hfsim_49", "032000b3e83aed69d4733ffb4779b9ab7c0ddb3e73d38b696899b6c2758d8755ab"}, // RLcKnqR9sxHq3UbW8rrTiZ7P8qD3nzVwpn
+        {"s7hfsim_50", "023250fc343b308dfa631e4711976799488f242269ce2572f3fb3224ccef6f43f9"}, // RNFqWCikdVXD4ALrsZNnQveWsPUuod7cYm
+        {"s7hfsim_51", "0211d124a41ebeec8c0f56e10116047b6feeeb7c33c31c402ad0645f2917ab991e"}, // RCcUf16KG1H2og6xYqKDzvtEwLuMQE4Rr7
+        {"s7hfsim_52", "02156549e01ad897d324066be05b78613e79fb43482fb0fff1444da8f0bb333bf7"}, // RV6MRNTEUrgrHbaiyDVWj9g5K4U8MX5Qrm
+        {"s7hfsim_53", "02f96fc6159f822f3193f370107d75b7fa1b8bb3142c282da719bd29003ecb3952"}, // RBd7GkGJVpQSQciEcZGSRVmuRNT2i7phYC
+        {"s7hfsim_54", "0383cfa95bb78c988ebbc2fbbd5d68d19e6c99315f0e16c3fa00360fde1b8772dd"}, // RQUfJYQzehkb5GrqFTaNTkVELzyADnHgAx
+        {"s7hfsim_55", "03c483a70e8de4f24c417bd6a70dd1405a1af3241fc36ddf4497bd2cac3bc25474"}, // R9bqLuXgjAqP9AJ2Mkk5Jqq4qF3t84LZDn
+        {"s7hfsim_56", "031f2e31a335f1a56db1093040c1d15d146ce34f3c3a5b5bc32882c5bf4be0a5df"}, // RUPx4dvk9DjCYT84qaRXuBWxrFPPJzGzvq
+        {"s7hfsim_57", "03ee840c8622c91621ac2740a737631e11cad84ae2fb0cbb4aae8ed24c41372a04"}, // RNqTujtpbfUSxFRvPXnsAjVG7cvWnNKGLz
+        {"s7hfsim_58", "038708294923978d7d29a3a5b1db80ec8c0687210c710001bc08936b4a13625447"}, // RPPaJR4dwhyDT8gYfu8nmyuU2nbhF11jJ3
+        {"s7hfsim_59", "025fedfa3c46c59d98bbf792538449025a15ba572b10f2acc56c80ee59bce354c6"}, // RUW7cngHUXongQaAkezqAuPt7f1yQUXmKU
+        {"s7hfsim_60", "022d57509041ada19cecc6236c307b2765266f299af3ebb86baabc89acfd64e5ab"}, // RHGjScANg5YDDRFLECJmUqunmmCmxS7Gjx
+        {"s7hfsim_61", "039b844bd06f77b7f8b31b3262669f20a1bd42733a2db0f92bcd4d30f6943e5af5"}, // RN2fpnJLkumAh5DBY47Ypb5HF1cX1CP6Ey
+        {"s7hfsim_62", "028cdf1eba5ca19547b143900ffd6987f892de7ad8f84ecf65971ff6ab1e7fb1c0"}, // RTZUGxs9WwpBDS8k4q7HdnQ7iPBpLi5bzw
+        {"s7hfsim_63", "03206412ff5eecdba539bf44c291fe91b3c81ec334ca785c46ca8dc35e6341eb03"}, // RXyHSQiPs83mrGfUq7vTDqAB7QZuu3zNfM
    }
 };

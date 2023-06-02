@@ -569,7 +569,7 @@ uint32_t komodo_assetmagic(const char *symbol,uint64_t supply,uint8_t *extraptr,
 uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
 {
     if ( magic == 0x8de4eef9 )
-        return 7770;
+        return 8880;
     else if ( extralen == 0 )
         return 8000 + (magic % 7777);
     return 16000 + (magic % 49500);
@@ -590,7 +590,7 @@ uint16_t komodo_port(const char *symbol,uint64_t supply,uint32_t *magicp,uint8_t
     if ( symbol == 0 || symbol[0] == 0 || strcmp("KMD",symbol) == 0 )
     {
         *magicp = 0x8de4eef9;
-        return 7770;
+        return 8880;
     }
     *magicp = komodo_assetmagic(symbol,supply,extraptr,extralen);
     return komodo_assetport(*magicp,extralen);
@@ -933,7 +933,7 @@ void get_userpass_and_port(const boost::filesystem::path& path, const std::strin
  */
 void set_kmd_user_password_port(const std::string& ltc_config_filename)
 {
-    ASSETCHAINS_P2PPORT = 7770; // default port for P2P
+    ASSETCHAINS_P2PPORT = 8880; // default port for P2P
     ASSETCHAINS_RPCPORT = 7771; // default port for RPC
 #ifdef __APPLE__
     std::string filename = "Komodo.conf";

@@ -662,7 +662,7 @@ TEST(TestParseNotarisation, FilePaths)
         EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );
         EXPECT_EQ( std::string(BTCUSERPASS), std::string(""));
         EXPECT_EQ(DEST_PORT, 0);
-        EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
+        EXPECT_EQ(ASSETCHAINS_P2PPORT, 8880);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
     {
@@ -681,7 +681,7 @@ TEST(TestParseNotarisation, FilePaths)
         EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );
         EXPECT_EQ( std::string(BTCUSERPASS), std::string(""));
         EXPECT_EQ(DEST_PORT, 0);
-        EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
+        EXPECT_EQ(ASSETCHAINS_P2PPORT, 8880);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
     {
@@ -701,7 +701,7 @@ TEST(TestParseNotarisation, FilePaths)
         EXPECT_EQ(std::string(KMDUSERPASS), std::string("test1:my_password"));
         EXPECT_EQ(std::string(BTCUSERPASS), std::string("test2:ltc_password"));
         EXPECT_EQ(DEST_PORT, 5678);
-        EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
+        EXPECT_EQ(ASSETCHAINS_P2PPORT, 8880);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
 #endif // #ifndef __WINDOWS__
